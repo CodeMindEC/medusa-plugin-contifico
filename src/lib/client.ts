@@ -409,6 +409,7 @@ export class ContificoClient {
         return this.request<ContificoDocumento>(`/documento/${id}/`, {
             method: "PUT",
             body: {
+                pos: doc.pos || this.apiPos,
                 fecha_emision: doc.fecha_emision,
                 hora_emision: doc.hora_emision ?? undefined,
                 tipo_registro: doc.tipo_registro,
@@ -426,6 +427,8 @@ export class ContificoClient {
                 referencia: doc.referencia,
                 adicional1: doc.adicional1,
                 adicional2: doc.adicional2,
+                persona_id: doc.persona_id,
+                cliente: doc.cliente,
                 detalles,
                 estado: "A",
                 anulado: true,

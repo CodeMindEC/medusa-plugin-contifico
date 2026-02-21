@@ -204,16 +204,31 @@ export async function GET(req: MedusaRequest, res: MedusaResponse) {
     const [configs] = await service.listAndCountContificoConfigs()
     const config = configs[0]
 
-    const invoices = invoiceMaps.map((m: any) => ({
-        id: m.id,
-        medusa_order_id: m.medusa_id,
-        contifico_doc_id: m.contifico_id,
-        is_test: isTestRef((m.metadata as any)?.referencia),
-        referencia: (m.metadata as any)?.referencia || null,
-        tipo_documento: (m.metadata as any)?.tipo_documento || null,
-        estado: (m.metadata as any)?.estado || null,
-        total: (m.metadata as any)?.total || null,
-        created_at: m.created_at,
+    const invoices = await Promise.all(invoiceMaps.map(async (m: any) => {
+        const isTest = isTestRef((m.metadata as any)?.referencia)
+        let contificoApiStatus: string | null = null
+
+        if (isTest && config?.api_key) {
+            try {
+                const client = new ContificoClient({ apiKey: config.api_key })
+                const docApi = await client.getDocumento(m.contifico_id)
+                contificoApiStatus = docApi.estado || null
+            } catch (err) {
+                console.warn(`[Contifico] No se pudo obtener el estado real del doc test ${m.contifico_id}`)
+            }
+        }
+
+        return {
+            id: m.id,
+            medusa_order_id: m.medusa_id,
+            contifico_doc_id: m.contifico_id,
+            is_test: isTest,
+            referencia: (m.metadata as any)?.referencia || null,
+            tipo_documento: (m.metadata as any)?.tipo_documento || null,
+            estado: contificoApiStatus || (m.metadata as any)?.estado || null,
+            total: (m.metadata as any)?.total || null,
+            created_at: m.created_at,
+        }
     }))
 
     res.json({
