@@ -1,71 +1,70 @@
 {
-    "name": "contifico-plugin",
-    "version": "0.0.1",
-    "description": "Medusa v2 plugin for Contifico ERP integration - products, stock, customers, and invoicing for Ecuador.",
-    "author": "CodeMindEC",
-    "license": "MIT",
-    "files": [
-        ".medusa/server"
-    ],
-    "exports": {
-        "./package.json": "./package.json",
-        "./workflows": "./.medusa/server/src/workflows/index.js",
-        "./.medusa/server/src/modules/*": "./.medusa/server/src/modules/*/index.js",
-        "./modules/*": "./.medusa/server/src/modules/*/index.js",
-        "./providers/*": "./.medusa/server/src/providers/*/index.js",
-        "./*": "./.medusa/server/src/*.js",
-        "./admin": {
-            "import": "./.medusa/server/src/admin/index.mjs",
-            "require": "./.medusa/server/src/admin/index.js",
-            "default": "./.medusa/server/src/admin/index.js"
-        }
-    },
-    "keywords": [
-        "medusa",
-        "plugin",
-        "medusa-plugin-other",
-        "medusa-plugin",
-        "medusa-v2"
-    ],
-    "scripts": {
-        "build": "medusa plugin:build",
-        "dev": "medusa plugin:develop",
-        "prepublishOnly": "medusa plugin:build"
-    },
-    "devDependencies": {
-        "@medusajs/admin-sdk": "2.12.4",
-        "@medusajs/admin-shared": "2.12.4",
-        "@medusajs/cli": "2.12.4",
-        "@medusajs/framework": "2.12.4",
-        "@medusajs/medusa": "2.12.4",
-        "@medusajs/test-utils": "2.12.4",
-        "@medusajs/ui": "4.0.25",
-        "@medusajs/icons": "2.12.4",
-        "@swc/core": "^1.7.28",
-        "@types/node": "^20.0.0",
-        "@types/react": "^18.3.2",
-        "@types/react-dom": "^18.2.25",
-        "prop-types": "^15.8.1",
-        "react": "^18.2.0",
-        "react-dom": "^18.2.0",
-        "ts-node": "^10.9.2",
-        "typescript": "^5.6.2",
-        "vite": "^5.2.11",
-        "yalc": "^1.0.0-pre.53",
-        "zod": "^3.22.4"
-    },
-    "peerDependencies": {
-        "@medusajs/admin-sdk": "2.12.4",
-        "@medusajs/admin-shared": "2.12.4",
-        "@medusajs/cli": "2.12.4",
-        "@medusajs/framework": "2.12.4",
-        "@medusajs/test-utils": "2.12.4",
-        "@medusajs/medusa": "2.12.4",
-        "@medusajs/ui": "4.0.25",
-        "@medusajs/icons": "2.12.4"
-    },
-    "engines": {
-        "node": ">=20"
-    },
-    "packageManager": "pnpm@9.15.9"
+  "name": "contifico-plugin",
+  "description": "Medusa v2 plugin for Contifico ERP integration - products, stock, customers, and invoicing for Ecuador.",
+  "version": "0.0.1",
+  "author": "CodeMindEC",
+  "devDependencies": {
+    "@medusajs/admin-sdk": "2.13.3",
+    "@medusajs/admin-shared": "2.13.3",
+    "@medusajs/cli": "2.13.3",
+    "@medusajs/framework": "2.13.3",
+    "@medusajs/icons": "^2.13.3",
+    "@medusajs/medusa": "2.13.3",
+    "@medusajs/test-utils": "2.13.3",
+    "@medusajs/ui": "^4.0.27",
+    "@swc/core": "^1.7.28",
+    "@types/node": "^20",
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
+    "prop-types": "^15.8.1",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5",
+    "vite": "^5.4.14",
+    "yalc": "^1.0.0-pre.53"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "exports": {
+    "./package.json": "./package.json",
+    "./workflows": "./.medusa/server/src/workflows/index.js",
+    "./.medusa/server/src/modules/*": "./.medusa/server/src/modules/*/index.js",
+    "./modules/*": "./.medusa/server/src/modules/*/index.js",
+    "./providers/*": "./.medusa/server/src/providers/*/index.js",
+    "./*": "./.medusa/server/src/*.js",
+    "./admin": {
+      "import": "./.medusa/server/src/admin/index.mjs",
+      "require": "./.medusa/server/src/admin/index.js",
+      "default": "./.medusa/server/src/admin/index.js"
+    }
+  },
+  "files": [
+    ".medusa/server"
+  ],
+  "keywords": [
+    "medusa",
+    "medusa-plugin",
+    "medusa-plugin-other",
+    "medusa-v2",
+    "plugin"
+  ],
+  "license": "MIT",
+  "packageManager": "pnpm@9.15.9",
+  "peerDependencies": {
+    "@medusajs/admin-sdk": "2.13.3",
+    "@medusajs/admin-shared": "2.13.3",
+    "@medusajs/cli": "2.13.3",
+    "@medusajs/framework": "2.13.3",
+    "@medusajs/icons": "^2.13.3",
+    "@medusajs/medusa": "2.13.3",
+    "@medusajs/test-utils": "2.13.3",
+    "@medusajs/ui": "^4.0.27"
+  },
+  "scripts": {
+    "build": "medusa plugin:build",
+    "dev": "medusa plugin:develop",
+    "prepublishOnly": "medusa plugin:build"
+  }
 }

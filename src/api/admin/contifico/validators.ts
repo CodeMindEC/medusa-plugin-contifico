@@ -1,4 +1,4 @@
-import { z } from "zod"
+import { z } from "@medusajs/framework/zod"
 
 export const UpdateContificoConfigSchema = z.object({
     api_key: z.string().min(1, "API Key es requerida"),
