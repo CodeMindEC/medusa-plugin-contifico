@@ -1,4 +1,4 @@
-export type ContificoLogLevel = "info" | "warn" | "error"
+export type ContificoLogLevel = "debug" | "info" | "warn" | "error"
 
 export interface ContificoLogContext extends Record<string, unknown> {
     correlation_id: string
@@ -67,8 +67,8 @@ export function logContificoEvent(
         ...context,
         ...(error
             ? {
-                  error: error instanceof Error ? error.message : String(error),
-              }
+                error: error instanceof Error ? error.message : String(error),
+            }
             : {}),
     }
 

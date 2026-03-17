@@ -35,6 +35,7 @@ import {
     isActiveInvoiceMapConflictError,
     serializeInvoiceDocument,
 } from "./invoice-documents-utils"
+import { loadInvoiceOrder } from "./invoice-documents-query"
 
 // ── Re-exports (backward compatibility) ──────────────────
 export {
