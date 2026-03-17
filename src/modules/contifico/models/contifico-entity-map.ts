@@ -18,7 +18,16 @@ const ContificoEntityMap = model.define("contifico_entity_map", {
     {
         on: ["entity_type", "medusa_id"],
         unique: true,
+        where: "deleted_at IS NULL AND entity_type <> 'invoice'",
+    },
+    {
+        on: ["entity_type", "medusa_id"],
         where: "deleted_at IS NULL",
+    },
+    {
+        on: ["entity_type", "medusa_id"],
+        unique: true,
+        where: "deleted_at IS NULL AND entity_type = 'invoice' AND medusa_id LIKE '%:%'",
     },
     {
         on: ["entity_type", "contifico_id"],

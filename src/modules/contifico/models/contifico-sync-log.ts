@@ -7,8 +7,12 @@ const ContificoSyncLog = model.define("contifico_sync_log", {
     id: model.id().primaryKey(),
     /** Tipo de sync: "products", "stock", "customers", "invoice" */
     sync_type: model.text(),
-    /** "success", "partial", "error" */
+    /** "queued", "running", "success", "partial", "error", "cancelled" */
     status: model.text(),
+    phase: model.text().nullable(),
+    progress_percent: model.number().default(0),
+    finished_at: model.text().nullable(),
+    parent_log_id: model.text().nullable(),
     /** Total de registros procesados */
     total_processed: model.number().default(0),
     /** Total de errores */

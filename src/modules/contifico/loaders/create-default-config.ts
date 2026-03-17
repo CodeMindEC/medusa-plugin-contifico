@@ -3,6 +3,7 @@ import type {
     IMedusaInternalService,
 } from "@medusajs/framework/types"
 import ContificoConfig from "../models/contifico-config"
+import { createCorrelationId, logContificoEvent } from "../../../lib/observability"
 
 /**
  * Crea un registro de configuracion por defecto si no existe ninguno.
@@ -15,6 +16,7 @@ import ContificoConfig from "../models/contifico-config"
 export default async function createDefaultConfigLoader({
     container,
 }: LoaderOptions) {
+    const correlationId = createCorrelationId("contifico_loader")
     try {
         const service: IMedusaInternalService<typeof ContificoConfig> =
             container.resolve("contificoConfigService")
@@ -40,10 +42,18 @@ export default async function createDefaultConfigLoader({
             last_customer_sync: null,
         })
 
-        console.log("[Contifico] Configuracion por defecto creada")
+        logContificoEvent("info", "Configuración por defecto creada", {
+            correlation_id: correlationId,
+            operation: "loader.create_default_config",
+        })
     } catch (error) {
-        console.error(
-            "[Contifico] Error creando configuracion por defecto:",
+        logContificoEvent(
+            "error",
+            "Error creando configuración por defecto",
+            {
+                correlation_id: correlationId,
+                operation: "loader.create_default_config",
+            },
             error
         )
     }

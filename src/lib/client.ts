@@ -55,46 +55,27 @@ export class ContificoClient {
     // ── Helpers ──────────────────────────────────────────────
 
     private async request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
-        const { method = "GET", body, params, useV1 = false } = opts
+        const { useV1 = false } = opts
+        return this.requestUrl<T>(this.buildUrl(path, useV1, opts.params), opts)
+    }
+
+    private buildUrl(
+        path: string,
+        useV1: boolean,
+        params?: Record<string, string>
+    ): string {
         const base = useV1 ? BASE_URL_V1 : BASE_URL_V2
-        let url = `${base}${path}`
+        const query = params ? `?${new URLSearchParams(params).toString()}` : ""
+        return `${base}${path}${query}`
+    }
 
-        if (params) {
-            const qs = new URLSearchParams(params).toString()
-            url += `?${qs}`
-        }
-
+    private async requestUrl<T>(url: string, opts: RequestOptions = {}): Promise<T> {
+        const { method = "GET", body } = opts
         let lastError: Error | null = null
 
         for (let attempt = 0; attempt <= this.retries; attempt++) {
             try {
-                const controller = new AbortController()
-                const timer = setTimeout(() => controller.abort(), this.timeout)
-
-                const res = await fetch(url, {
-                    method,
-                    headers: {
-                        Authorization: this.apiKey,
-                        "Content-Type": "application/json",
-                    },
-                    body: body ? JSON.stringify(body) : undefined,
-                    signal: controller.signal,
-                })
-
-                clearTimeout(timer)
-
-                if (!res.ok) {
-                    const errorBody = await res.text()
-                    throw new Error(
-                        `Contifico API ${method} ${path} responded ${res.status}: ${errorBody}`
-                    )
-                }
-
-                if (res.status === 204) {
-                    return undefined as T
-                }
-
-                return (await res.json()) as T
+                return await this.fetchJson<T>(url, method, body)
             } catch (err) {
                 lastError = err as Error
                 if (attempt < this.retries && !String(err).includes("400")) {
@@ -108,6 +89,42 @@ export class ContificoClient {
         throw lastError
     }
 
+    private async fetchJson<T>(
+        url: string,
+        method: RequestOptions["method"],
+        body?: unknown
+    ): Promise<T> {
+        const controller = new AbortController()
+        const timer = setTimeout(() => controller.abort(), this.timeout)
+
+        try {
+            const res = await fetch(url, {
+                method,
+                headers: {
+                    Authorization: this.apiKey,
+                    "Content-Type": "application/json",
+                },
+                body: body ? JSON.stringify(body) : undefined,
+                signal: controller.signal,
+            })
+
+            if (!res.ok) {
+                const errorBody = await res.text()
+                throw new Error(
+                    `Contifico API ${method} ${url} responded ${res.status}: ${errorBody}`
+                )
+            }
+
+            if (res.status === 204) {
+                return undefined as T
+            }
+
+            return (await res.json()) as T
+        } finally {
+            clearTimeout(timer)
+        }
+    }
+
     /**
      * Helper para obtener TODOS los resultados paginados de v2.
      * Sigue `next` hasta que no haya mas paginas.
@@ -116,22 +133,20 @@ export class ContificoClient {
         path: string,
         params?: Record<string, string>
     ): Promise<T[]> {
-        const first = await this.request<ContificoPaginatedResponse<T>>(path, {
+        const firstPage = await this.request<ContificoPaginatedResponse<T>>(path, {
             params,
         })
+        return this.collectPaginatedResults(firstPage)
+    }
 
-        const results = [...first.results]
+    private async collectPaginatedResults<T>(
+        firstPage: ContificoPaginatedResponse<T>
+    ): Promise<T[]> {
+        const results = [...firstPage.results]
+        let nextUrl = firstPage.next
 
-        let nextUrl = first.next
         while (nextUrl) {
-            const res = await fetch(nextUrl, {
-                headers: {
-                    Authorization: this.apiKey,
-                    "Content-Type": "application/json",
-                },
-            })
-            if (!res.ok) break
-            const page = (await res.json()) as ContificoPaginatedResponse<T>
+            const page = await this.requestUrl<ContificoPaginatedResponse<T>>(nextUrl)
             results.push(...page.results)
             nextUrl = page.next
         }
@@ -170,7 +185,7 @@ export class ContificoClient {
     ): Promise<ContificoProducto> {
         return this.request<ContificoProducto>("/producto/", {
             method: "POST",
-            body: data,
+            body: { pos: this.apiPos, ...data },
         })
     }
 
@@ -244,22 +259,7 @@ export class ContificoClient {
 
         // Si es paginado, iterar páginas
         if (raw && typeof raw === "object" && "results" in raw) {
-            const results = [...raw.results]
-            let nextUrl = raw.next
-            while (nextUrl) {
-                const res = await fetch(nextUrl, {
-                    headers: {
-                        Authorization: this.apiKey,
-                        "Content-Type": "application/json",
-                    },
-                })
-                if (!res.ok) break
-                const page =
-                    (await res.json()) as ContificoPaginatedResponse<ContificoStockBodega>
-                results.push(...page.results)
-                nextUrl = page.next
-            }
-            return results
+            return this.collectPaginatedResults(raw)
         }
 
         return []
@@ -378,9 +378,20 @@ export class ContificoClient {
         id: string,
         data: Partial<ContificoDocumentoCreate>
     ): Promise<ContificoDocumento> {
+        const payload = { ...data }
+        if (!payload.pos && this.apiPos) {
+            payload.pos = this.apiPos
+        }
+        if (!payload.pos) {
+            throw new Error(
+                "Contifico: 'pos' (API Token del POS) es obligatorio para crear documentos. " +
+                "Configuralo en apiPos del client o incluyelo en el payload."
+            )
+        }
+
         return this.request<ContificoDocumento>(`/documento/${id}/`, {
             method: "PUT",
-            body: data,
+            body: payload,
         })
     }
 
@@ -416,7 +427,8 @@ export class ContificoClient {
                 tipo_documento: doc.tipo_documento,
                 documento: doc.documento,
                 electronico: doc.electronico,
-                autorizacion: doc.autorizacion,
+                autorizacion: doc.autorizacion || "0000000000", // Requerido por API, placeholder si no existe
+                reserva_relacionada: doc.reserva_relacionada ?? null, // Requerido por API
                 subtotal_12: doc.subtotal_12,
                 subtotal_0: doc.subtotal_0,
                 iva: doc.iva,

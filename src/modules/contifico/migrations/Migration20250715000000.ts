@@ -12,6 +12,7 @@ export class Migration20250715000000 extends Migration {
         "sync_products_enabled" boolean not null default false,
         "sync_customers_enabled" boolean not null default false,
         "auto_invoice_enabled" boolean not null default false,
+        "auto_preinvoice_enabled" boolean not null default false,
         "sync_interval_minutes" integer not null default 60,
         "last_product_sync" text null,
         "last_customer_sync" text null,

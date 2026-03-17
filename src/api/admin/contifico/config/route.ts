@@ -1,24 +1,23 @@
 import type { MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
-import { CONTIFICO_MODULE } from "../../../../modules/contifico"
-import type ContificoModuleService from "../../../../modules/contifico/service"
 import { UpdateContificoConfigSchema } from "../validators"
-import { fromCSV, toCSV } from "../../../../lib/csv"
+import {
+    normalizeAdvancedSettings,
+    type AdvancedContificoSettings,
+} from "../../../../lib/advanced-settings"
+import {
+    serializeContificoConfigInput,
+} from "../../../../lib/contifico-config"
+import { createCorrelationId, logContificoEvent } from "../../../../lib/observability"
+import { getContificoConfig, getContificoService } from "../shared"
 
 /**
  * GET /admin/contifico/config
  * Obtiene la configuracion actual de Contifico.
  */
 export async function GET(req: MedusaRequest, res: MedusaResponse) {
-    const service: ContificoModuleService = req.scope.resolve(CONTIFICO_MODULE)
-    const [configs] = await service.listAndCountContificoConfigs()
-    const raw = configs[0] ?? null
-
-    // Enviar bodega_ids como array al frontend
-    const config = raw
-        ? { ...raw, bodega_ids: fromCSV(raw.bodega_ids) }
-        : null
-
-    res.json({ config })
+    const service = getContificoService(req.scope)
+    const { normalized } = await getContificoConfig(service)
+    res.json({ config: normalized })
 }
 
 /**
@@ -26,6 +25,7 @@ export async function GET(req: MedusaRequest, res: MedusaResponse) {
  * Crea o actualiza la configuracion de Contifico.
  */
 export async function POST(req: MedusaRequest, res: MedusaResponse) {
+    const correlationId = createCorrelationId("contifico_config_save")
     const parsed = UpdateContificoConfigSchema.safeParse(req.body)
 
     if (!parsed.success) {
@@ -33,14 +33,38 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
         return
     }
 
-    const service: ContificoModuleService = req.scope.resolve(CONTIFICO_MODULE)
+    const service = getContificoService(req.scope)
     const [existing] = await service.listAndCountContificoConfigs()
-
-    // Convertir array de bodega_ids a CSV para guardar
-    const dataToSave = {
+    const weightedPvpField =
+        parsed.data.weighted_pvp_field ||
+        (parsed.data.advanced_settings
+            ? normalizeAdvancedSettings(
+                  parsed.data.advanced_settings as Partial<AdvancedContificoSettings>
+              ).pricing.default_pvp_field
+            : undefined)
+    const normalizedAdvancedSettings = parsed.data.advanced_settings
+        ? normalizeAdvancedSettings(
+              {
+                  ...(parsed.data.advanced_settings as Partial<AdvancedContificoSettings>),
+                  weighted: {
+                      ...(
+                          (parsed.data.advanced_settings as Partial<AdvancedContificoSettings>)
+                              .weighted || {}
+                      ),
+                      enabled: parsed.data.variant_mode === "weighted",
+                  },
+              },
+              {
+                  default_weighted_pvp_field: weightedPvpField,
+                  default_weighted_enabled: parsed.data.variant_mode === "weighted",
+              }
+          )
+        : undefined
+    const dataToSave = serializeContificoConfigInput({
         ...parsed.data,
-        bodega_ids: toCSV(parsed.data.bodega_ids),
-    }
+        weighted_pvp_field: weightedPvpField,
+        advanced_settings: normalizedAdvancedSettings,
+    })
 
     try {
         let config
@@ -54,12 +78,25 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
             config = await service.createContificoConfigs(dataToSave)
         }
 
-        // Devolver bodega_ids como array
-        res.json({ config: { ...config, bodega_ids: fromCSV(config.bodega_ids) } })
-    } catch (err: any) {
-        console.error("[Contifico] Error guardando config:", err)
+        // Devolver bodega_ids como array e import_filters como objeto
+        res.json({
+            config: (await getContificoConfig(service)).normalized,
+        })
+    } catch (err) {
+        logContificoEvent(
+            "error",
+            "Error guardando configuración",
+            {
+                correlation_id: correlationId,
+                operation: "config.save",
+            },
+            err
+        )
         res.status(500).json({
-            error: err?.message || "Error interno al guardar configuración. Verifica que las migraciones estén al día.",
+            error:
+                err instanceof Error
+                    ? err.message
+                    : "Error interno al guardar configuracion. Verifica que las migraciones esten al dia.",
         })
     }
 }

@@ -92,13 +92,11 @@ export function productSimilarity(a: string, b: string): number {
 /** Umbral mínimo para considerar un match como "sugerido" */
 export const SIMILARITY_THRESHOLD = 0.45
 
-/** Umbral para considerar match como "alto" (casi seguro) */
-const HIGH_CONFIDENCE_THRESHOLD = 0.75
-
 export interface ProductMatch {
     contifico_id: string
     contifico_nombre: string
     contifico_codigo: string
+    contifico_imagen?: string | null
     medusa_id: string
     medusa_title: string
     medusa_sku: string | null

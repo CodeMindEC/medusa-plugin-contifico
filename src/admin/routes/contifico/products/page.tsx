@@ -6,99 +6,150 @@ import {
     Text,
     Badge,
     Table,
-    Checkbox,
     Toaster,
     toast,
     Input,
+    Select,
 } from "@medusajs/ui"
-import { ArrowUturnLeft, XMark } from "@medusajs/icons"
-import { useState, useCallback } from "react"
+import { ArrowUturnLeft, XMark, PencilSquare } from "@medusajs/icons"
+import { useState, useCallback, type ReactNode } from "react"
+import type { RulesByWeightStrategyConfig } from "../../../../lib/weighted-price-strategies"
+import {
+    AvailableMedusa,
+    ContificoCell,
+    LinkedProduct,
+    LinkStats,
+    mappingModeLabel,
+    matchTypeColor,
+    matchTypeLabel,
+    MatchStats,
+    MedusaSelect,
+    ProductMatch,
+    RelinkCandidate,
+    SimilarityBadge,
+    UnmatchedProduct,
+    weightedPvpOptions,
+} from "./shared"
 
-// ── Types ──────────────────────────────────────────────────
+type TabId = "linked" | "suggestions"
+const EMPTY_SELECT_VALUE = "__empty__"
+type WeightedPriceSyncOverrideValue = "" | "true" | "false"
 
-interface ProductMatch {
-    contifico_id: string
-    contifico_nombre: string
-    contifico_codigo: string
-    medusa_id: string
-    medusa_title: string
-    medusa_sku: string | null
-    similarity: number
-    match_type: "exact_sku" | "exact_name" | "similar" | "barcode"
+interface LinkedDefaultsState {
+    variant_mode: "auto" | "contifico" | "simple" | "weighted"
+    weighted_pvp_field: "pvp1" | "pvp2" | "pvp3" | "pvp4"
+    weighted_price_sync_enabled: boolean
 }
 
-interface LinkedProduct {
-    map_id: string
-    contifico_id: string
-    contifico_nombre: string
-    contifico_codigo: string
-    medusa_id: string
-    medusa_title: string
-    medusa_sku: string | null
-    created_by_plugin: boolean
-    auto_linked: boolean
-    match_type: string | null
+interface MappingOverrideState {
+    mapping_mode_override: string
+    weighted_pvp_field: string
+    weighted_price_sync_override: WeightedPriceSyncOverrideValue
 }
 
-interface UnlinkedContifico {
-    contifico_id: string
-    contifico_nombre: string
-    contifico_codigo: string
+const EMPTY_MAPPING_OVERRIDE: MappingOverrideState = {
+    mapping_mode_override: "",
+    weighted_pvp_field: "",
+    weighted_price_sync_override: "",
 }
 
-interface UnlinkedMedusa {
-    medusa_id: string
-    medusa_title: string
-    medusa_sku: string | null
+function InlineSelect({
+    value,
+    onValueChange,
+    placeholder,
+    children,
+}: {
+    value: string
+    onValueChange: (value: string) => void
+    placeholder: string
+    children: ReactNode
+}) {
+    return (
+        <Select
+            value={value || EMPTY_SELECT_VALUE}
+            onValueChange={(nextValue) =>
+                onValueChange(nextValue === EMPTY_SELECT_VALUE ? "" : nextValue)
+            }
+            size="small"
+        >
+            <Select.Trigger className="w-full">
+                <Select.Value placeholder={placeholder} />
+            </Select.Trigger>
+            <Select.Content>
+                <Select.Item value={EMPTY_SELECT_VALUE}>{placeholder}</Select.Item>
+                {children}
+            </Select.Content>
+        </Select>
+    )
 }
 
-interface LinkStats {
-    total_linked: number
-    total_unlinked_contifico: number
-    total_unlinked_medusa: number
-    contifico_total: number
-    medusa_total: number
+function toWeightedPriceSyncOverrideValue(
+    value: boolean | null | undefined
+): WeightedPriceSyncOverrideValue {
+    if (value == null) {
+        return ""
+    }
+
+    return value ? "true" : "false"
 }
 
-interface MatchStats {
-    contifico_total: number
-    medusa_total: number
-    already_linked: number
-    exact_sku: number
-    exact_name: number
-    barcode: number
-    similar: number
-    unmatched_contifico: number
+function fromWeightedPriceSyncOverrideValue(
+    value: WeightedPriceSyncOverrideValue
+): boolean | null {
+    if (value === "") {
+        return null
+    }
+
+    return value === "true"
 }
 
-// ── Helpers ────────────────────────────────────────────────
-
-const matchTypeLabel: Record<string, string> = {
-    exact_sku: "SKU exacto",
-    exact_name: "Nombre exacto",
-    barcode: "Cod. barras",
-    similar: "Similar",
-    sku: "SKU",
-    name: "Nombre",
+function buildMappingOverride(item: LinkedProduct): MappingOverrideState {
+    return {
+        mapping_mode_override: item.mapping_mode_override || "",
+        weighted_pvp_field: item.weighted_pvp_field_override || "",
+        weighted_price_sync_override: toWeightedPriceSyncOverrideValue(
+            item.weighted_price_sync_override
+        ),
+    }
 }
 
-const matchTypeColor: Record<string, "green" | "blue" | "purple" | "orange"> = {
-    exact_sku: "green",
-    exact_name: "blue",
-    barcode: "purple",
-    similar: "orange",
-    sku: "green",
-    name: "blue",
+function getAvailableRelinkOptions(
+    options: AvailableMedusa[],
+    linkedProducts: LinkedProduct[]
+): AvailableMedusa[] {
+    const linkedMedusaIds = new Set(linkedProducts.map((product) => product.medusa_id))
+    return options.filter((option) => !linkedMedusaIds.has(option.medusa_id))
 }
 
-function similarityBadge(score: number) {
-    if (score >= 0.9) return <Badge color="green">{(score * 100).toFixed(0)}%</Badge>
-    if (score >= 0.7) return <Badge color="blue">{(score * 100).toFixed(0)}%</Badge>
-    if (score >= 0.5) return <Badge color="orange">{(score * 100).toFixed(0)}%</Badge>
-    return <Badge color="red">{(score * 100).toFixed(0)}%</Badge>
-}
+function getLinkSkipFeedback(reason: string) {
+    if (reason === "Ya existe un mapeo para este producto de Medusa") {
+        return {
+            title: "Producto ya vinculado",
+            description:
+                "El producto Medusa seleccionado ya esta vinculado a otro producto de Contifico.",
+        }
+    }
 
-type TabId = "linked" | "suggestions" | "unlinked"
+    if (reason === "Ya existe un mapeo para este producto de Contifico") {
+        return {
+            title: "Producto Contifico ya vinculado",
+            description:
+                "Este producto de Contifico ya tiene un mapeo activo con otro producto de Medusa.",
+        }
+    }
+
+    if (reason === "El vínculo ya existe") {
+        return {
+            title: "Vinculo existente",
+            description: "Ese producto ya esta vinculado.",
+        }
+    }
+
+    return {
+        title: "No se pudo vincular",
+        description: reason,
+    }
+}
 
 // ── Component ──────────────────────────────────────────────
 
@@ -107,22 +158,60 @@ const ProductMatchPage = () => {
 
     // Linked state
     const [linked, setLinked] = useState<LinkedProduct[]>([])
-    const [unlinkedContifico, setUnlinkedContifico] = useState<UnlinkedContifico[]>([])
-    const [unlinkedMedusa, setUnlinkedMedusa] = useState<UnlinkedMedusa[]>([])
     const [linkStats, setLinkStats] = useState<LinkStats | null>(null)
     const [isLoadingLinked, setIsLoadingLinked] = useState(false)
     const [linkedFilter, setLinkedFilter] = useState("")
-    const [unlinkedFilter, setUnlinkedFilter] = useState("")
+    const [allMedusa, setAllMedusa] = useState<AvailableMedusa[]>([])
+    const [linkedDefaults, setLinkedDefaults] = useState<LinkedDefaultsState | null>(null)
+    const [relinkingId, setRelinkingId] = useState<string | null>(null) // contifico_id being re-linked
+    const [relinkSelection, setRelinkSelection] = useState<string>("") // new medusa_id
+    const [mappingOverrides, setMappingOverrides] = useState<Record<string, MappingOverrideState>>({})
 
     // Match/suggestions state
     const [matches, setMatches] = useState<ProductMatch[]>([])
+    const [unmatched, setUnmatched] = useState<UnmatchedProduct[]>([])
+    const [relinkCandidates, setRelinkCandidates] = useState<RelinkCandidate[]>([])
+    const [availableMedusa, setAvailableMedusa] = useState<AvailableMedusa[]>([])
     const [matchStats, setMatchStats] = useState<MatchStats | null>(null)
     const [isLoadingMatches, setIsLoadingMatches] = useState(false)
-    const [isLinking, setIsLinking] = useState(false)
     const [isUnlinking, setIsUnlinking] = useState(false)
-    const [selected, setSelected] = useState<Set<string>>(new Set())
     const [hasLoadedMatches, setHasLoadedMatches] = useState(false)
     const [hasLoadedLinked, setHasLoadedLinked] = useState(false)
+    const [suggestionsFilter, setSuggestionsFilter] = useState("")
+    const [suggestionsView, setSuggestionsView] = useState<"all" | "matched" | "unmatched" | "relink">("all")
+    // Manual selections: contificoId → medusaId
+    const [manualSelections, setManualSelections] = useState<Record<string, string>>({})
+    const [linkingId, setLinkingId] = useState<string | null>(null)
+
+    const originBadge = (product: LinkedProduct) => {
+        if (product.link_origin === "plugin_created") {
+            return { color: "blue" as const, label: "Plugin" }
+        }
+
+        if (product.auto_linked) {
+            return { color: "purple" as const, label: "Auto" }
+        }
+
+        if (product.link_origin === "relinked_to_existing") {
+            return { color: "orange" as const, label: "Re-link" }
+        }
+
+        return { color: "grey" as const, label: "Manual" }
+    }
+    const availableRelinkOptions = getAvailableRelinkOptions(allMedusa, linked)
+
+    const updateMappingOverride = useCallback(
+        (contificoId: string, patch: Partial<MappingOverrideState>) => {
+            setMappingOverrides((prev) => ({
+                ...prev,
+                [contificoId]: {
+                    ...(prev[contificoId] || EMPTY_MAPPING_OVERRIDE),
+                    ...patch,
+                },
+            }))
+        },
+        []
+    )
 
     // ── Fetch linked products ──
     const fetchLinked = useCallback(async () => {
@@ -137,9 +226,17 @@ const ProductMatchPage = () => {
                 return
             }
             setLinked(data.linked || [])
-            setUnlinkedContifico(data.unlinked_contifico || [])
-            setUnlinkedMedusa(data.unlinked_medusa || [])
             setLinkStats(data.stats || null)
+            setAllMedusa(data.all_medusa || [])
+            setLinkedDefaults(data.defaults || null)
+            setMappingOverrides(
+                Object.fromEntries(
+                    (data.linked || []).map((item: LinkedProduct) => [
+                        item.contifico_id,
+                        buildMappingOverride(item),
+                    ])
+                )
+            )
             setHasLoadedLinked(true)
         } catch (err) {
             toast.error("Error", { description: (err as Error).message })
@@ -151,7 +248,7 @@ const ProductMatchPage = () => {
     // ── Fetch match suggestions ──
     const fetchMatches = useCallback(async () => {
         setIsLoadingMatches(true)
-        setSelected(new Set())
+        setManualSelections({})
         try {
             const res = await fetch("/admin/contifico/products/match", {
                 credentials: "include",
@@ -162,6 +259,9 @@ const ProductMatchPage = () => {
                 return
             }
             setMatches(data.matches || [])
+            setUnmatched(data.unmatched || [])
+            setRelinkCandidates(data.relink_candidates || [])
+            setAvailableMedusa(data.available_medusa || [])
             setMatchStats(data.stats || null)
             setHasLoadedMatches(true)
         } catch (err) {
@@ -171,59 +271,61 @@ const ProductMatchPage = () => {
         }
     }, [])
 
-    // ── Selection helpers ──
-    const toggleSelect = (id: string) => {
-        setSelected((prev) => {
-            const next = new Set(prev)
-            next.has(id) ? next.delete(id) : next.add(id)
-            return next
-        })
-    }
-    const selectAll = () => setSelected(new Set(matches.map((m) => m.contifico_id)))
-    const selectNone = () => setSelected(new Set())
-    const selectByType = (type: string) =>
-        setSelected(new Set(matches.filter((m) => m.match_type === type).map((m) => m.contifico_id)))
-    const selectHighConfidence = () =>
-        setSelected(new Set(matches.filter((m) => m.similarity >= 0.75).map((m) => m.contifico_id)))
-
-    // ── Link selected ──
-    const handleLink = async () => {
-        if (selected.size === 0) return
-        setIsLinking(true)
+    // ── Link a single product (auto-matched or manually selected) ──
+    const handleLinkSingle = async (
+        contificoId: string,
+        medusaId: string,
+        contificoCodigo: string,
+        contificoNombre: string,
+        contificoImagen: string | null
+    ) => {
+        setLinkingId(contificoId)
         try {
-            const links = matches
-                .filter((m) => selected.has(m.contifico_id))
-                .map((m) => ({
-                    contifico_id: m.contifico_id,
-                    medusa_id: m.medusa_id,
-                    contifico_codigo: m.contifico_codigo,
-                }))
-
             const res = await fetch("/admin/contifico/products/link", {
                 method: "POST",
                 credentials: "include",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ links }),
+                body: JSON.stringify({
+                    links: [{
+                        contifico_id: contificoId,
+                        medusa_id: medusaId,
+                        contifico_codigo: contificoCodigo,
+                        contifico_nombre: contificoNombre,
+                        contifico_imagen: contificoImagen,
+                    }],
+                }),
             })
             const data = await res.json()
             if (data.error) {
                 toast.error("Error", { description: data.error })
                 return
             }
-            toast.success("Productos vinculados", {
-                description: `${data.linked} vinculado(s), ${data.skipped} omitido(s)`,
-            })
-            setMatches((prev) => prev.filter((m) => !selected.has(m.contifico_id)))
-            setSelected(new Set())
-            if (matchStats) {
-                setMatchStats({ ...matchStats, already_linked: matchStats.already_linked + data.linked })
+            const skippedReason = data?.details?.skipped?.[0]?.reason
+            if (!data?.linked && skippedReason) {
+                const feedback = getLinkSkipFeedback(skippedReason)
+                toast.error(feedback.title, { description: feedback.description })
+                return
             }
-            // Invalidar datos de vinculados para que se recarguen
+            toast.success("Vinculado", { description: `"${contificoNombre}" vinculado correctamente` })
+            // Remove from matches and unmatched
+            setMatches((prev) => prev.filter((m) => m.contifico_id !== contificoId))
+            setUnmatched((prev) => prev.filter((u) => u.contifico_id !== contificoId))
+            // Remove used Medusa product from available list
+            setAvailableMedusa((prev) => prev.filter((m) => m.medusa_id !== medusaId))
+            // Clear manual selection
+            setManualSelections((prev) => {
+                const next = { ...prev }
+                delete next[contificoId]
+                return next
+            })
+            if (matchStats) {
+                setMatchStats({ ...matchStats, already_linked: matchStats.already_linked + 1 })
+            }
             setHasLoadedLinked(false)
         } catch (err) {
             toast.error("Error", { description: (err as Error).message })
         } finally {
-            setIsLinking(false)
+            setLinkingId(null)
         }
     }
 
@@ -255,6 +357,84 @@ const ProductMatchPage = () => {
         }
     }
 
+    // ── Re-link product ──
+    const handleRelink = async (contificoId: string, newMedusaId: string, nombre: string) => {
+        setLinkingId(contificoId)
+        try {
+            const res = await fetch("/admin/contifico/products/link", {
+                method: "PUT",
+                credentials: "include",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ contifico_id: contificoId, new_medusa_id: newMedusaId }),
+            })
+            const data = await res.json()
+            if (data.error) {
+                toast.error("Error", { description: data.error })
+                return
+            }
+            const priceUpdateCount =
+                typeof data?.price_updated === "number"
+                    ? data.price_updated
+                    : typeof data?.weighted_price_updated === "number"
+                      ? data.weighted_price_updated
+                    : 0
+            const successDescription = data.warning
+                ? data.warning
+                : priceUpdateCount > 0
+                  ? `"${nombre}" ahora apunta al nuevo producto Medusa y sincronizo ${priceUpdateCount} precio(s).`
+                  : `"${nombre}" ahora apunta al nuevo producto Medusa`
+
+            toast.success(data.warning ? "Re-vinculado con advertencia" : "Re-vinculado", {
+                description: successDescription,
+            })
+            setRelinkingId(null)
+            setRelinkSelection("")
+            // Remove from relink candidates
+            setRelinkCandidates((prev) => prev.filter((r) => r.contifico_id !== contificoId))
+            // Reload linked list
+            setHasLoadedLinked(false)
+            fetchLinked()
+        } catch (err) {
+            toast.error("Error", { description: (err as Error).message })
+        } finally {
+            setLinkingId(null)
+        }
+    }
+
+    const handleSaveMapping = async (item: LinkedProduct) => {
+        const override = mappingOverrides[item.contifico_id] || EMPTY_MAPPING_OVERRIDE
+
+        setLinkingId(item.contifico_id)
+        try {
+            const res = await fetch("/admin/contifico/products/link", {
+                method: "PUT",
+                credentials: "include",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    contifico_id: item.contifico_id,
+                    mapping_mode_override: override.mapping_mode_override || null,
+                    weighted_pvp_field: override.weighted_pvp_field || null,
+                    weighted_price_sync_override: fromWeightedPriceSyncOverrideValue(
+                        override.weighted_price_sync_override
+                    ),
+                }),
+            })
+            const data = await res.json()
+            if (data.error) {
+                toast.error("Error", { description: data.error })
+                return
+            }
+            toast.success("Mapeo actualizado", {
+                description: `"${item.contifico_nombre}" actualizado`,
+            })
+            fetchLinked()
+        } catch (err) {
+            toast.error("Error", { description: (err as Error).message })
+        } finally {
+            setLinkingId(null)
+        }
+    }
+
     // ── Filter helpers ──
     const filteredLinked = linked.filter((l) => {
         if (!linkedFilter) return true
@@ -267,29 +447,10 @@ const ProductMatchPage = () => {
         )
     })
 
-    const filteredUnlinkedContifico = unlinkedContifico.filter((u) => {
-        if (!unlinkedFilter) return true
-        const q = unlinkedFilter.toLowerCase()
-        return (
-            u.contifico_nombre.toLowerCase().includes(q) ||
-            u.contifico_codigo.toLowerCase().includes(q)
-        )
-    })
-
-    const filteredUnlinkedMedusa = unlinkedMedusa.filter((u) => {
-        if (!unlinkedFilter) return true
-        const q = unlinkedFilter.toLowerCase()
-        return (
-            u.medusa_title.toLowerCase().includes(q) ||
-            (u.medusa_sku && u.medusa_sku.toLowerCase().includes(q))
-        )
-    })
-
     // ── Tabs ──
     const tabs: Array<{ id: TabId; label: string; count?: number }> = [
         { id: "linked", label: "Vinculados", count: linkStats?.total_linked },
         { id: "suggestions", label: "Sugerencias", count: hasLoadedMatches ? matches.length : undefined },
-        { id: "unlinked", label: "Sin vincular", count: linkStats ? linkStats.total_unlinked_contifico + linkStats.total_unlinked_medusa : undefined },
     ]
 
     return (
@@ -320,7 +481,6 @@ const ProductMatchPage = () => {
                                 setActiveTab(tab.id)
                                 if (tab.id === "linked" && !hasLoadedLinked) fetchLinked()
                                 if (tab.id === "suggestions" && !hasLoadedMatches) fetchMatches()
-                                if (tab.id === "unlinked" && !hasLoadedLinked) fetchLinked()
                             }}
                             className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === tab.id
                                     ? "border-ui-fg-base text-ui-fg-base"
@@ -350,14 +510,10 @@ const ProductMatchPage = () => {
                             <>
                                 {/* Stats */}
                                 {linkStats && (
-                                    <div className="grid grid-cols-3 gap-4 mb-4">
+                                    <div className="grid grid-cols-2 gap-4 mb-4">
                                         <Container className="p-4 text-center">
                                             <Text className="text-ui-fg-subtle text-xs">Vinculados</Text>
                                             <Text weight="plus" className="text-xl text-ui-fg-positive">{linkStats.total_linked}</Text>
-                                        </Container>
-                                        <Container className="p-4 text-center">
-                                            <Text className="text-ui-fg-subtle text-xs">Contifico total</Text>
-                                            <Text weight="plus" className="text-xl">{linkStats.contifico_total}</Text>
                                         </Container>
                                         <Container className="p-4 text-center">
                                             <Text className="text-ui-fg-subtle text-xs">Medusa total</Text>
@@ -393,6 +549,7 @@ const ProductMatchPage = () => {
                                                     <Table.HeaderCell>Medusa</Table.HeaderCell>
                                                     <Table.HeaderCell className="w-24 text-center">Tipo</Table.HeaderCell>
                                                     <Table.HeaderCell className="w-24 text-center">Origen</Table.HeaderCell>
+                                                    <Table.HeaderCell className="min-w-[280px]">Mapeo</Table.HeaderCell>
                                                     <Table.HeaderCell className="w-16"></Table.HeaderCell>
                                                 </Table.Row>
                                             </Table.Header>
@@ -400,18 +557,49 @@ const ProductMatchPage = () => {
                                                 {filteredLinked.map((l) => (
                                                     <Table.Row key={l.map_id}>
                                                         <Table.Cell>
-                                                            <div>
-                                                                <Text weight="plus" className="text-sm">{l.contifico_nombre}</Text>
-                                                                <Text className="text-xs text-ui-fg-subtle">Cod: {l.contifico_codigo}</Text>
-                                                            </div>
+                                                            <ContificoCell
+                                                                nombre={l.contifico_nombre}
+                                                                codigo={l.contifico_codigo}
+                                                            />
                                                         </Table.Cell>
                                                         <Table.Cell>
-                                                            <div>
-                                                                <Text weight="plus" className="text-sm">{l.medusa_title}</Text>
-                                                                {l.medusa_sku && (
-                                                                    <Text className="text-xs text-ui-fg-subtle">SKU: {l.medusa_sku}</Text>
-                                                                )}
-                                                            </div>
+                                                            {relinkingId === l.contifico_id ? (
+                                                                <div className="flex items-center gap-2">
+                                                                    <div className="flex-1">
+                                                                        <MedusaSelect
+                                                                            value={relinkSelection}
+                                                                            onChange={setRelinkSelection}
+                                                                            options={availableRelinkOptions}
+                                                                            placeholder="Sin vínculo"
+                                                                        />
+                                                                    </div>
+                                                                    <Button
+                                                                        size="small"
+                                                                        disabled={!relinkSelection}
+                                                                        onClick={() => handleRelink(l.contifico_id, relinkSelection, l.contifico_nombre)}
+                                                                    >
+                                                                        Guardar
+                                                                    </Button>
+                                                                    <button
+                                                                        onClick={() => { setRelinkingId(null); setRelinkSelection("") }}
+                                                                        className="text-ui-fg-subtle hover:text-ui-fg-base p-1"
+                                                                    >
+                                                                        <XMark />
+                                                                    </button>
+                                                                </div>
+                                                            ) : (
+                                                                <div>
+                                                                    <Text weight="plus" className="text-sm">{l.medusa_title}</Text>
+                                                                    {l.medusa_sku && (
+                                                                        <Text className="text-xs text-ui-fg-subtle">SKU: {l.medusa_sku}</Text>
+                                                                    )}
+                                                                    {l.medusa_missing && (
+                                                                        <Text className="text-xs text-ui-fg-subtle">
+                                                                            El vínculo actual ya no existe en Medusa.
+                                                                        </Text>
+                                                                    )}
+                                                                </div>
+                                                            )}
                                                         </Table.Cell>
                                                         <Table.Cell className="text-center">
                                                             {l.match_type && (
@@ -421,19 +609,138 @@ const ProductMatchPage = () => {
                                                             )}
                                                         </Table.Cell>
                                                         <Table.Cell className="text-center">
-                                                            <Badge color={l.created_by_plugin ? "blue" : l.auto_linked ? "purple" : "grey"}>
-                                                                {l.created_by_plugin ? "Plugin" : l.auto_linked ? "Auto" : "Manual"}
+                                                            <Badge color={originBadge(l).color}>
+                                                                {originBadge(l).label}
                                                             </Badge>
                                                         </Table.Cell>
                                                         <Table.Cell>
-                                                            <button
-                                                                onClick={() => handleUnlink(l.medusa_id, l.contifico_nombre)}
-                                                                disabled={isUnlinking}
-                                                                className="text-ui-fg-subtle hover:text-ui-fg-destructive transition-colors p-1"
-                                                                title="Desvincular"
-                                                            >
-                                                                <XMark />
-                                                            </button>
+                                                                <div className="space-y-2">
+                                                                    <div className="flex flex-wrap items-center gap-2">
+                                                                        <Badge color={l.mapping_mode === "weighted" ? "orange" : "grey"}>
+                                                                            {mappingModeLabel[l.mapping_mode]}
+                                                                        </Badge>
+                                                                        <Badge
+                                                                            color={
+                                                                                l.weighted_price_sync_enabled
+                                                                                    ? "blue"
+                                                                                    : "grey"
+                                                                            }
+                                                                        >
+                                                                            {l.weighted_price_sync_enabled
+                                                                                ? "Precio desde Contífico"
+                                                                                : "Precio manual Medusa"}
+                                                                        </Badge>
+                                                                    {l.mapping_mode === "weighted" && (
+                                                                        <Badge color={l.weighted_ready ? "green" : "red"}>
+                                                                            {l.weighted_variants_ready}/{l.weighted_variants_total} con peso
+                                                                        </Badge>
+                                                                    )}
+                                                                    <Text className="text-xs text-ui-fg-subtle">
+                                                                        {l.effective_rules?.weighted.pricing_strategy === "rules_by_weight"
+                                                                            ? `Precio weighted: reglas por peso (${((l.effective_rules.weighted.strategy_config as RulesByWeightStrategyConfig | undefined)?.rules || []).length} regla(s))`
+                                                                            : `Precio weighted: campo fijo ${l.weighted_pvp_field.toUpperCase()}`}
+                                                                    </Text>
+                                                                </div>
+                                                                <div className="grid grid-cols-1 gap-2 md:grid-cols-[1fr_1fr_1fr_auto]">
+                                                                    <InlineSelect
+                                                                        value={mappingOverrides[l.contifico_id]?.mapping_mode_override || ""}
+                                                                        onValueChange={(nextValue) =>
+                                                                            updateMappingOverride(l.contifico_id, {
+                                                                                mapping_mode_override: nextValue,
+                                                                            })
+                                                                        }
+                                                                        placeholder={`Usar global (${mappingModeLabel[linkedDefaults?.variant_mode || "auto"]})`}
+                                                                    >
+                                                                        <Select.Item value="auto">Automático</Select.Item>
+                                                                        <Select.Item value="contifico">Variantes de Contifico</Select.Item>
+                                                                        <Select.Item value="simple">Variante única</Select.Item>
+                                                                        <Select.Item value="weighted">Producto base por peso</Select.Item>
+                                                                    </InlineSelect>
+                                                                    <InlineSelect
+                                                                        value={mappingOverrides[l.contifico_id]?.weighted_pvp_field || ""}
+                                                                        onValueChange={(nextValue) =>
+                                                                            updateMappingOverride(l.contifico_id, {
+                                                                                weighted_pvp_field: nextValue,
+                                                                            })
+                                                                        }
+                                                                        placeholder={`Usar global (${(linkedDefaults?.weighted_pvp_field || "pvp1").toUpperCase()})`}
+                                                                    >
+                                                                        {weightedPvpOptions.map((field) => (
+                                                                            <Select.Item key={field} value={field}>
+                                                                                {field.toUpperCase()}
+                                                                            </Select.Item>
+                                                                        ))}
+                                                                    </InlineSelect>
+                                                                    <InlineSelect
+                                                                        value={
+                                                                            mappingOverrides[l.contifico_id]
+                                                                                ?.weighted_price_sync_override || ""
+                                                                        }
+                                                                        onValueChange={(nextValue) =>
+                                                                            updateMappingOverride(l.contifico_id, {
+                                                                                weighted_price_sync_override:
+                                                                                    nextValue as WeightedPriceSyncOverrideValue,
+                                                                            })
+                                                                        }
+                                                                        placeholder={`Usar global (${linkedDefaults?.weighted_price_sync_enabled ? "Contífico" : "manual"})`}
+                                                                    >
+                                                                        <Select.Item value="true">
+                                                                            Seguir a Contífico
+                                                                        </Select.Item>
+                                                                        <Select.Item value="false">
+                                                                            Dejar manual en Medusa
+                                                                        </Select.Item>
+                                                                    </InlineSelect>
+                                                                    <Button
+                                                                        size="small"
+                                                                        variant="secondary"
+                                                                        onClick={() => handleSaveMapping(l)}
+                                                                        isLoading={linkingId === l.contifico_id}
+                                                                        disabled={linkingId !== null}
+                                                                    >
+                                                                        Guardar
+                                                                    </Button>
+                                                                </div>
+                                                                {l.mapping_mode === "weighted" && !l.weighted_ready && (
+                                                                    <Text className="text-xs text-ui-fg-destructive">
+                                                                        Faltan pesos en: {l.weighted_missing_variants.join(", ")}
+                                                                    </Text>
+                                                                )}
+                                                                {l.mapping_mode === "weighted" && l.weighted_variant_weights.length > 0 && (
+                                                                    <Text className="text-xs text-ui-fg-subtle">
+                                                                        Pesos leídos: {l.weighted_variant_weights
+                                                                            .map((item) =>
+                                                                                item.grams != null
+                                                                                    ? `${item.label}=${item.grams} g`
+                                                                                    : `${item.label}=sin peso`
+                                                                            )
+                                                                            .join(", ")}
+                                                                    </Text>
+                                                                )}
+                                                            </div>
+                                                        </Table.Cell>
+                                                        <Table.Cell>
+                                                            <div className="flex items-center gap-1">
+                                                                <button
+                                                                    onClick={() => {
+                                                                        setRelinkingId(l.contifico_id)
+                                                                        setRelinkSelection("")
+                                                                    }}
+                                                                    disabled={isUnlinking || relinkingId !== null}
+                                                                    className="text-ui-fg-subtle hover:text-ui-fg-interactive transition-colors p-1"
+                                                                    title="Cambiar producto Medusa"
+                                                                >
+                                                                    <PencilSquare />
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => handleUnlink(l.medusa_id, l.contifico_nombre)}
+                                                                    disabled={isUnlinking || relinkingId !== null}
+                                                                    className="text-ui-fg-subtle hover:text-ui-fg-destructive transition-colors p-1"
+                                                                    title="Desvincular"
+                                                                >
+                                                                    <XMark />
+                                                                </button>
+                                                            </div>
                                                         </Table.Cell>
                                                     </Table.Row>
                                                 ))}
@@ -446,7 +753,7 @@ const ProductMatchPage = () => {
                     </>
                 )}
 
-                {/* ═══════════ TAB: SUGERENCIAS ═══════════ */}
+                {/* ═══════════ TAB: SUGERENCIAS + MANUAL ═══════════ */}
                 {activeTab === "suggestions" && (
                     <>
                         {/* Analyze button */}
@@ -482,27 +789,57 @@ const ProductMatchPage = () => {
                                     {matchStats.exact_name > 0 && <Badge color="blue">{matchStats.exact_name} nombre exacto</Badge>}
                                     {matchStats.barcode > 0 && <Badge color="purple">{matchStats.barcode} cod. barras</Badge>}
                                     {matchStats.similar > 0 && <Badge color="orange">{matchStats.similar} similares</Badge>}
+                                    {matchStats.relink_candidates > 0 && <Badge color="red">{matchStats.relink_candidates} posibles duplicados</Badge>}
                                 </div>
                             </Container>
                         )}
 
-                        {/* Actions bar */}
-                        {matches.length > 0 && (
-                            <Container className="mb-4 p-4">
-                                <div className="flex items-center justify-between flex-wrap gap-2">
-                                    <div className="flex items-center gap-2 flex-wrap">
-                                        <Text className="text-sm text-ui-fg-subtle">Seleccionar:</Text>
-                                        <Button variant="secondary" size="small" onClick={selectAll}>Todos ({matches.length})</Button>
-                                        <Button variant="secondary" size="small" onClick={selectHighConfidence}>Alta confianza (≥75%)</Button>
-                                        <Button variant="secondary" size="small" onClick={() => selectByType("exact_sku")}>Solo SKU exacto</Button>
-                                        <Button variant="secondary" size="small" onClick={() => selectByType("exact_name")}>Solo nombre exacto</Button>
-                                        <Button variant="secondary" size="small" onClick={selectNone}>Ninguno</Button>
-                                    </div>
-                                    <Button onClick={handleLink} disabled={selected.size === 0 || isLinking} isLoading={isLinking}>
-                                        Vincular {selected.size} producto(s)
+                        {/* Filter bar */}
+                        {hasLoadedMatches && (matches.length > 0 || unmatched.length > 0 || relinkCandidates.length > 0) && (
+                            <div className="flex items-center gap-3 mb-4">
+                                <Input
+                                    placeholder="Filtrar por nombre o código..."
+                                    value={suggestionsFilter}
+                                    onChange={(e) => setSuggestionsFilter(e.target.value)}
+                                    className="max-w-sm"
+                                />
+                                <div className="flex gap-1 flex-wrap">
+                                    <Button
+                                        variant={suggestionsView === "all" ? "primary" : "secondary"}
+                                        size="small"
+                                        onClick={() => setSuggestionsView("all")}
+                                    >
+                                        Todos ({matches.length + unmatched.length + relinkCandidates.length})
                                     </Button>
+                                    {relinkCandidates.length > 0 && (
+                                        <Button
+                                            variant={suggestionsView === "relink" ? "primary" : "secondary"}
+                                            size="small"
+                                            onClick={() => setSuggestionsView("relink")}
+                                        >
+                                            ⚠️ Re-vincular ({relinkCandidates.length})
+                                        </Button>
+                                    )}
+                                    {matches.length > 0 && (
+                                        <Button
+                                            variant={suggestionsView === "matched" ? "primary" : "secondary"}
+                                            size="small"
+                                            onClick={() => setSuggestionsView("matched")}
+                                        >
+                                            Con sugerencia ({matches.length})
+                                        </Button>
+                                    )}
+                                    {unmatched.length > 0 && (
+                                        <Button
+                                            variant={suggestionsView === "unmatched" ? "primary" : "secondary"}
+                                            size="small"
+                                            onClick={() => setSuggestionsView("unmatched")}
+                                        >
+                                            Sin match ({unmatched.length})
+                                        </Button>
+                                    )}
                                 </div>
-                            </Container>
+                            </div>
                         )}
 
                         {/* Results */}
@@ -512,11 +849,11 @@ const ProductMatchPage = () => {
                                     Haz clic en "Analizar Productos" para buscar coincidencias entre Contifico y Medusa.
                                 </Text>
                             </Container>
-                        ) : matches.length === 0 ? (
+                        ) : matches.length === 0 && unmatched.length === 0 && relinkCandidates.length === 0 ? (
                             <Container className="p-8 text-center">
                                 <Text className="text-ui-fg-subtle">
-                                    No se encontraron matches pendientes.
-                                    {matchStats && matchStats.already_linked > 0 ? ` Ya hay ${matchStats.already_linked} producto(s) vinculado(s).` : ""}
+                                    ¡Todos los productos están vinculados!
+                                    {matchStats && matchStats.already_linked > 0 ? ` (${matchStats.already_linked} producto(s) vinculados)` : ""}
                                 </Text>
                             </Container>
                         ) : (
@@ -524,42 +861,157 @@ const ProductMatchPage = () => {
                                 <Table>
                                     <Table.Header>
                                         <Table.Row>
-                                            <Table.HeaderCell className="w-10">
-                                                <Checkbox
-                                                    checked={selected.size === matches.length && matches.length > 0}
-                                                    onCheckedChange={(checked) => (checked ? selectAll() : selectNone())}
-                                                />
-                                            </Table.HeaderCell>
                                             <Table.HeaderCell>Contifico</Table.HeaderCell>
-                                            <Table.HeaderCell>Medusa</Table.HeaderCell>
-                                            <Table.HeaderCell className="w-28 text-center">Similitud</Table.HeaderCell>
-                                            <Table.HeaderCell className="w-28 text-center">Tipo</Table.HeaderCell>
+                                            <Table.HeaderCell>Medusa (match/manual)</Table.HeaderCell>
+                                            <Table.HeaderCell className="w-28 text-center">Match</Table.HeaderCell>
+                                            <Table.HeaderCell className="w-28 text-center">Acción</Table.HeaderCell>
                                         </Table.Row>
                                     </Table.Header>
                                     <Table.Body>
-                                        {matches.map((m) => (
-                                            <Table.Row key={m.contifico_id} className={selected.has(m.contifico_id) ? "bg-ui-bg-highlight" : ""}>
-                                                <Table.Cell>
-                                                    <Checkbox checked={selected.has(m.contifico_id)} onCheckedChange={() => toggleSelect(m.contifico_id)} />
-                                                </Table.Cell>
-                                                <Table.Cell>
-                                                    <div>
-                                                        <Text weight="plus" className="text-sm">{m.contifico_nombre}</Text>
-                                                        <Text className="text-xs text-ui-fg-subtle">Cod: {m.contifico_codigo}</Text>
-                                                    </div>
-                                                </Table.Cell>
-                                                <Table.Cell>
-                                                    <div>
-                                                        <Text weight="plus" className="text-sm">{m.medusa_title}</Text>
-                                                        {m.medusa_sku && <Text className="text-xs text-ui-fg-subtle">SKU: {m.medusa_sku}</Text>}
-                                                    </div>
-                                                </Table.Cell>
-                                                <Table.Cell className="text-center">{similarityBadge(m.similarity)}</Table.Cell>
-                                                <Table.Cell className="text-center">
-                                                    <Badge color={matchTypeColor[m.match_type]}>{matchTypeLabel[m.match_type]}</Badge>
-                                                </Table.Cell>
-                                            </Table.Row>
-                                        ))}
+                                        {/* Auto-matched products */}
+                                        {(suggestionsView === "all" || suggestionsView === "matched") &&
+                                            matches
+                                                .filter((m) => {
+                                                    if (!suggestionsFilter) return true
+                                                    const q = suggestionsFilter.toLowerCase()
+                                                    return m.contifico_nombre.toLowerCase().includes(q) ||
+                                                        m.contifico_codigo.toLowerCase().includes(q) ||
+                                                        m.medusa_title.toLowerCase().includes(q)
+                                                })
+                                                .map((m) => (
+                                                    <Table.Row key={m.contifico_id}>
+                                                        <Table.Cell>
+                                                            <ContificoCell
+                                                                nombre={m.contifico_nombre}
+                                                                codigo={m.contifico_codigo}
+                                                            />
+                                                        </Table.Cell>
+                                                        <Table.Cell>
+                                                            <div>
+                                                                <Text weight="plus" className="text-sm">{m.medusa_title}</Text>
+                                                                {m.medusa_sku && <Text className="text-xs text-ui-fg-subtle">SKU: {m.medusa_sku}</Text>}
+                                                            </div>
+                                                        </Table.Cell>
+                                                        <Table.Cell className="text-center">
+                                                            <div className="flex flex-col items-center gap-1">
+                                                                <SimilarityBadge score={m.similarity} />
+                                                                <Badge color={matchTypeColor[m.match_type]}>{matchTypeLabel[m.match_type]}</Badge>
+                                                            </div>
+                                                        </Table.Cell>
+                                                        <Table.Cell className="text-center">
+                                                            <Button
+                                                                size="small"
+                                                                onClick={() => handleLinkSingle(
+                                                                    m.contifico_id, m.medusa_id,
+                                                                    m.contifico_codigo, m.contifico_nombre,
+                                                                    m.contifico_imagen || null
+                                                                )}
+                                                                isLoading={linkingId === m.contifico_id}
+                                                                disabled={linkingId !== null}
+                                                            >
+                                                                Vincular
+                                                            </Button>
+                                                        </Table.Cell>
+                                                    </Table.Row>
+                                                ))}
+
+                                        {/* Unmatched products (manual linking) */}
+                                        {(suggestionsView === "all" || suggestionsView === "unmatched") &&
+                                            unmatched
+                                                .filter((u) => {
+                                                    if (!suggestionsFilter) return true
+                                                    const q = suggestionsFilter.toLowerCase()
+                                                    return u.contifico_nombre.toLowerCase().includes(q) ||
+                                                        u.contifico_codigo.toLowerCase().includes(q)
+                                                })
+                                                .map((u) => (
+                                                    <Table.Row key={u.contifico_id} className="bg-ui-bg-subtle">
+                                                        <Table.Cell>
+                                                            <ContificoCell
+                                                                nombre={u.contifico_nombre}
+                                                                codigo={u.contifico_codigo}
+                                                            />
+                                                        </Table.Cell>
+                                                        <Table.Cell>
+                                                            <MedusaSelect
+                                                                value={manualSelections[u.contifico_id] || ""}
+                                                                onChange={(val) => setManualSelections(prev => ({ ...prev, [u.contifico_id]: val }))}
+                                                                options={availableMedusa}
+                                                            />
+                                                        </Table.Cell>
+                                                        <Table.Cell className="text-center">
+                                                            <Badge color="red">Sin match</Badge>
+                                                        </Table.Cell>
+                                                        <Table.Cell className="text-center">
+                                                            <Button
+                                                                size="small"
+                                                                disabled={!manualSelections[u.contifico_id] || linkingId !== null}
+                                                                isLoading={linkingId === u.contifico_id}
+                                                                onClick={() => {
+                                                                    const medusaId = manualSelections[u.contifico_id]
+                                                                    if (medusaId) {
+                                                                        handleLinkSingle(
+                                                                            u.contifico_id, medusaId,
+                                                                            u.contifico_codigo, u.contifico_nombre,
+                                                                            u.contifico_imagen || null
+                                                                        )
+                                                                    }
+                                                                }}
+                                                            >
+                                                                Vincular
+                                                            </Button>
+                                                        </Table.Cell>
+                                                    </Table.Row>
+                                                ))}
+
+                                        {/* Relink candidates (plugin-created duplicates) */}
+                                        {(suggestionsView === "all" || suggestionsView === "relink") &&
+                                            relinkCandidates
+                                                .filter((r) => {
+                                                    if (!suggestionsFilter) return true
+                                                    const q = suggestionsFilter.toLowerCase()
+                                                    return r.contifico_nombre.toLowerCase().includes(q) ||
+                                                        r.contifico_codigo.toLowerCase().includes(q) ||
+                                                        r.current_medusa_title.toLowerCase().includes(q)
+                                                })
+                                                .map((r) => (
+                                                    <Table.Row key={`relink-${r.contifico_id}`} className="bg-ui-bg-subtle">
+                                                        <Table.Cell>
+                                                            <ContificoCell
+                                                                nombre={r.contifico_nombre}
+                                                                codigo={r.contifico_codigo}
+                                                                currentMedusaTitle={r.current_medusa_title}
+                                                            />
+                                                        </Table.Cell>
+                                                        <Table.Cell>
+                                                            <MedusaSelect
+                                                                value={manualSelections[r.contifico_id] || r.suggested_medusa_id || ""}
+                                                                onChange={(val) => setManualSelections(prev => ({ ...prev, [r.contifico_id]: val }))}
+                                                                options={availableMedusa}
+                                                                suggestedId={r.suggested_medusa_id}
+                                                                suggestedTitle={r.suggested_medusa_title}
+                                                            />
+                                                        </Table.Cell>
+                                                        <Table.Cell className="text-center">
+                                                            <Badge color="orange">Duplicado</Badge>
+                                                        </Table.Cell>
+                                                        <Table.Cell className="text-center">
+                                                            <Button
+                                                                size="small"
+                                                                disabled={linkingId !== null}
+                                                                isLoading={linkingId === r.contifico_id}
+                                                                onClick={() => {
+                                                                    const newMedusaId = manualSelections[r.contifico_id] || r.suggested_medusa_id
+                                                                    if (newMedusaId) {
+                                                                        handleRelink(r.contifico_id, newMedusaId, r.contifico_nombre)
+                                                                    }
+                                                                }}
+                                                            >
+                                                                Re-vincular
+                                                            </Button>
+                                                        </Table.Cell>
+                                                    </Table.Row>
+                                                ))}
                                     </Table.Body>
                                 </Table>
                             </Container>
@@ -567,111 +1019,7 @@ const ProductMatchPage = () => {
                     </>
                 )}
 
-                {/* ═══════════ TAB: SIN VINCULAR ═══════════ */}
-                {activeTab === "unlinked" && (
-                    <>
-                        {!hasLoadedLinked ? (
-                            <Container className="p-8 text-center">
-                                <Button onClick={fetchLinked} isLoading={isLoadingLinked}>
-                                    Cargar productos
-                                </Button>
-                            </Container>
-                        ) : (
-                            <>
-                                <div className="flex items-center gap-3 mb-4">
-                                    <Input
-                                        placeholder="Filtrar por nombre, código o SKU..."
-                                        value={unlinkedFilter}
-                                        onChange={(e) => setUnlinkedFilter(e.target.value)}
-                                        className="max-w-sm"
-                                    />
-                                    <Button variant="secondary" size="small" onClick={fetchLinked} isLoading={isLoadingLinked}>
-                                        Recargar
-                                    </Button>
-                                </div>
 
-                                {/* Unlinked Contifico */}
-                                <Container className="mb-6 p-4">
-                                    <div className="flex items-center gap-2 mb-3">
-                                        <Heading level="h2">En Contifico sin vínculo</Heading>
-                                        <Badge color="orange">{filteredUnlinkedContifico.length}</Badge>
-                                    </div>
-                                    <Text className="text-ui-fg-subtle text-sm mb-3">
-                                        Productos activos en Contifico que no están vinculados a ningún producto de Medusa.
-                                        Usa la pestaña "Sugerencias" para vincularlos automáticamente.
-                                    </Text>
-                                    {filteredUnlinkedContifico.length === 0 ? (
-                                        <Text className="text-ui-fg-subtle text-sm">
-                                            {unlinkedFilter ? "Sin resultados." : "Todos los productos de Contifico están vinculados. ✓"}
-                                        </Text>
-                                    ) : (
-                                        <div className="max-h-80 overflow-y-auto">
-                                            <Table>
-                                                <Table.Header>
-                                                    <Table.Row>
-                                                        <Table.HeaderCell>Nombre</Table.HeaderCell>
-                                                        <Table.HeaderCell className="w-32">Código</Table.HeaderCell>
-                                                    </Table.Row>
-                                                </Table.Header>
-                                                <Table.Body>
-                                                    {filteredUnlinkedContifico.map((u) => (
-                                                        <Table.Row key={u.contifico_id}>
-                                                            <Table.Cell>
-                                                                <Text className="text-sm">{u.contifico_nombre}</Text>
-                                                            </Table.Cell>
-                                                            <Table.Cell>
-                                                                <Text className="text-sm text-ui-fg-subtle">{u.contifico_codigo}</Text>
-                                                            </Table.Cell>
-                                                        </Table.Row>
-                                                    ))}
-                                                </Table.Body>
-                                            </Table>
-                                        </div>
-                                    )}
-                                </Container>
-
-                                {/* Unlinked Medusa */}
-                                <Container className="p-4">
-                                    <div className="flex items-center gap-2 mb-3">
-                                        <Heading level="h2">En Medusa sin vínculo</Heading>
-                                        <Badge color="blue">{filteredUnlinkedMedusa.length}</Badge>
-                                    </div>
-                                    <Text className="text-ui-fg-subtle text-sm mb-3">
-                                        Productos en Medusa que no están vinculados a ningún producto de Contifico.
-                                    </Text>
-                                    {filteredUnlinkedMedusa.length === 0 ? (
-                                        <Text className="text-ui-fg-subtle text-sm">
-                                            {unlinkedFilter ? "Sin resultados." : "Todos los productos de Medusa están vinculados. ✓"}
-                                        </Text>
-                                    ) : (
-                                        <div className="max-h-80 overflow-y-auto">
-                                            <Table>
-                                                <Table.Header>
-                                                    <Table.Row>
-                                                        <Table.HeaderCell>Nombre</Table.HeaderCell>
-                                                        <Table.HeaderCell className="w-32">SKU</Table.HeaderCell>
-                                                    </Table.Row>
-                                                </Table.Header>
-                                                <Table.Body>
-                                                    {filteredUnlinkedMedusa.map((u) => (
-                                                        <Table.Row key={u.medusa_id}>
-                                                            <Table.Cell>
-                                                                <Text className="text-sm">{u.medusa_title}</Text>
-                                                            </Table.Cell>
-                                                            <Table.Cell>
-                                                                <Text className="text-sm text-ui-fg-subtle">{u.medusa_sku || "—"}</Text>
-                                                            </Table.Cell>
-                                                        </Table.Row>
-                                                    ))}
-                                                </Table.Body>
-                                            </Table>
-                                        </div>
-                                    )}
-                                </Container>
-                            </>
-                        )}
-                    </>
-                )}
             </Container>
         </>
     )

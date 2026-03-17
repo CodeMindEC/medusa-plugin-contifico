@@ -12,6 +12,8 @@ const ContificoConfig = model.define("contifico_config", {
     sync_customers_enabled: model.boolean().default(false),
     /** Crear facturas automaticamente al completar pago */
     auto_invoice_enabled: model.boolean().default(false),
+    /** Crear prefacturas automaticamente al crear orden */
+    auto_preinvoice_enabled: model.boolean().default(false),
     /** Intervalo de sincronizacion en minutos */
     sync_interval_minutes: model.number().default(60),
     /** Habilitar "gestionar inventario" en variantes sincronizadas */
@@ -22,8 +24,14 @@ const ContificoConfig = model.define("contifico_config", {
     sales_channel_id: model.text().nullable(),
     /** ID del perfil de envío para productos sincronizados */
     shipping_profile_id: model.text().nullable(),
-    /** Modo de variantes: auto | contifico | simple */
+    /** Modo de mapeo: auto | contifico | simple | weighted */
     variant_mode: model.text().default("auto"),
+    /** Campo PVP por defecto usado por el modo weighted */
+    weighted_pvp_field: model.text().default("pvp1"),
+    /** Configuración avanzada del plugin (JSON serializado) */
+    advanced_settings: model.text().nullable(),
+    /** Filtros de importación de productos (JSON serializado de ImportFilterConfig) */
+    import_filters: model.text().nullable(),
     /** Modo de prueba para facturación (genera docs con ref MEDUSA-TEST-*) */
     invoice_test_mode: model.boolean().default(false),
     /** Ultimo sync exitoso de productos (ISO string) */
@@ -33,3 +41,4 @@ const ContificoConfig = model.define("contifico_config", {
 })
 
 export default ContificoConfig
+
