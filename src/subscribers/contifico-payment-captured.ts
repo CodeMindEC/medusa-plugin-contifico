@@ -38,6 +38,13 @@ export default async function contificoPaymentCapturedHandler({
     const config = await getRequiredInvoiceConfig(service)
 
     if (!config?.api_key || !config.api_pos || !config.auto_invoice_enabled) {
+        logContificoEvent("debug", "FAC automática omitida: config incompleta", {
+            correlation_id: correlationId,
+            operation: "subscriber.payment_captured",
+            has_api_key: !!config?.api_key,
+            has_api_pos: !!config?.api_pos,
+            auto_invoice_enabled: !!config?.auto_invoice_enabled,
+        })
         return
     }
 
@@ -53,6 +60,11 @@ export default async function contificoPaymentCapturedHandler({
 
         const orderId = payments[0]?.payment_collection?.order?.id
         if (!orderId) {
+            logContificoEvent("warn", "Payment sin orden vinculada, omitiendo FAC", {
+                correlation_id: correlationId,
+                operation: "subscriber.payment_captured",
+                payment_id: paymentId,
+            })
             return
         }
 

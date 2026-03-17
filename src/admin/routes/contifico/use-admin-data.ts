@@ -9,7 +9,7 @@ import type {
     InvoiceEntry,
     SyncLog,
 } from "./types"
-import { getErrorDescription, parseJsonResponse } from "./controller-helpers"
+import { getErrorDescription, isAbortError, parseJsonResponse } from "./controller-helpers"
 
 interface UseAdminDataParams {
     apiKey: string
@@ -80,10 +80,11 @@ export function useAdminData({
     setVariantMode,
     setWeightedPvpField,
 }: UseAdminDataParams) {
-    const fetchConfig = useCallback(async () => {
+    const fetchConfig = useCallback(async (signal?: AbortSignal) => {
         try {
             const response = await fetch("/admin/contifico/config", {
                 credentials: "include",
+                signal,
             })
             const data = await parseJsonResponse<{ config?: ContificoConfigData }>(
                 response
@@ -123,7 +124,7 @@ export function useAdminData({
                 setFilterRules([])
             }
         } catch (error) {
-            reportLoadError("configuración", error)
+            if (!isAbortError(error)) reportLoadError("configuración", error)
         } finally {
             setIsLoading(false)
         }
@@ -151,43 +152,45 @@ export function useAdminData({
         setWeightedPvpField,
     ])
 
-    const fetchBodegas = useCallback(async () => {
+    const fetchBodegas = useCallback(async (signal?: AbortSignal) => {
         setIsLoadingBodegas(true)
         try {
             const response = await fetch("/admin/contifico/config/bodegas", {
                 credentials: "include",
+                signal,
             })
             const data = await parseJsonResponse<{ bodegas?: Bodega[] }>(response)
             if (data.bodegas) {
                 setBodegas(data.bodegas)
             }
         } catch (error) {
-            reportLoadError("bodegas", error)
+            if (!isAbortError(error)) reportLoadError("bodegas", error)
         } finally {
             setIsLoadingBodegas(false)
         }
     }, [reportLoadError, setBodegas, setIsLoadingBodegas])
 
-    const fetchSyncLogs = useCallback(async () => {
+    const fetchSyncLogs = useCallback(async (signal?: AbortSignal) => {
         try {
             const response = await fetch("/admin/contifico/sync-logs?limit=10", {
                 credentials: "include",
+                signal,
             })
             const data = await parseJsonResponse<{ sync_logs?: SyncLog[] }>(response)
             if (data.sync_logs) {
                 setSyncLogs(data.sync_logs)
             }
         } catch (error) {
-            reportLoadError("logs", error)
+            if (!isAbortError(error)) reportLoadError("logs", error)
         }
     }, [reportLoadError, setSyncLogs])
 
-    const fetchMedusaOptions = useCallback(async () => {
+    const fetchMedusaOptions = useCallback(async (signal?: AbortSignal) => {
         try {
             const [salesChannelsResponse, shippingProfilesResponse] =
                 await Promise.all([
-                    fetch("/admin/sales-channels", { credentials: "include" }),
-                    fetch("/admin/shipping-profiles", { credentials: "include" }),
+                    fetch("/admin/sales-channels", { credentials: "include", signal }),
+                    fetch("/admin/shipping-profiles", { credentials: "include", signal }),
                 ])
             const salesChannelData = await parseJsonResponse<{
                 sales_channels?: Array<{ id: string; name: string }>
@@ -205,7 +208,7 @@ export function useAdminData({
                 (current) => current || nextShippingProfiles[0]?.id || ""
             )
         } catch (error) {
-            reportLoadError("opciones de Medusa", error)
+            if (!isAbortError(error)) reportLoadError("opciones de Medusa", error)
         }
     }, [
         reportLoadError,
@@ -215,10 +218,11 @@ export function useAdminData({
         setShippingProfiles,
     ])
 
-    const fetchInvoices = useCallback(async () => {
+    const fetchInvoices = useCallback(async (signal?: AbortSignal) => {
         try {
             const response = await fetch("/admin/contifico/invoices", {
                 credentials: "include",
+                signal,
             })
             const data = await parseJsonResponse<{ invoices?: InvoiceEntry[] }>(
                 response
@@ -227,41 +231,44 @@ export function useAdminData({
                 setInvoices(data.invoices)
             }
         } catch (error) {
-            reportLoadError("facturas", error)
+            if (!isAbortError(error)) reportLoadError("facturas", error)
         }
     }, [reportLoadError, setInvoices])
 
     useEffect(() => {
-        fetchConfig()
-        fetchSyncLogs()
-        fetchMedusaOptions()
-        fetchInvoices()
+        const ac = new AbortController()
+        fetchConfig(ac.signal)
+        fetchSyncLogs(ac.signal)
+        fetchMedusaOptions(ac.signal)
+        fetchInvoices(ac.signal)
+        return () => ac.abort()
     }, [fetchConfig, fetchInvoices, fetchMedusaOptions, fetchSyncLogs])
 
     useEffect(() => {
+        const ac = new AbortController()
         const intervalId = window.setInterval(() => {
-            fetchSyncLogs()
+            fetchSyncLogs(ac.signal)
         }, 5000)
-
-        return () => window.clearInterval(intervalId)
+        return () => { ac.abort(); window.clearInterval(intervalId) }
     }, [fetchSyncLogs])
 
     useEffect(() => {
         if (!isTableOpen) {
             return
         }
-
-        fetchInvoices()
+        const ac = new AbortController()
+        fetchInvoices(ac.signal)
         const intervalId = window.setInterval(() => {
-            fetchInvoices()
+            fetchInvoices(ac.signal)
         }, 15000)
-
-        return () => window.clearInterval(intervalId)
+        return () => { ac.abort(); window.clearInterval(intervalId) }
     }, [fetchInvoices, isTableOpen])
 
     useEffect(() => {
         if (apiKey) {
-            fetchBodegas()
+            const ac = new AbortController()
+            fetchBodegas(ac.signal)
+            return () => ac.abort()
         }
     }, [apiKey, configApiKey, fetchBodegas])
 

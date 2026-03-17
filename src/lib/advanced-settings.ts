@@ -1,4 +1,5 @@
 import { safeJsonParse } from "./json"
+import { hasKeys } from "./utils"
 import type { WeightedPvpField } from "./contifico-config"
 import type {
     AdvancedContificoSettings,
@@ -161,8 +162,8 @@ export function normalizeAdvancedSettings(
         input.weighted.pvp_field_by_grams.length > 0
     const migrationStatus: AdvancedSettingsMigrationStatus =
         input?.version === 2 &&
-        !hasLegacyWeightedRules &&
-        input.migration_status !== "migrated_v2"
+            !hasLegacyWeightedRules &&
+            input.migration_status !== "migrated_v2"
             ? "native_v2"
             : "migrated_v2"
 
@@ -247,17 +248,17 @@ export function normalizeProductRulesOverride(
         DEFAULT_ADVANCED_SETTINGS.pricing.default_pvp_field
     const pricing = override.pricing
         ? normalizePartialPricingAdvancedSettings(
-              override.pricing,
-              defaultWeightedPvpField
-          )
+            override.pricing,
+            defaultWeightedPvpField
+        )
         : undefined
     const pricingFallback =
         pricing?.default_pvp_field || defaultWeightedPvpField
     const weighted = override.weighted
         ? normalizePartialWeightedAdvancedSettings(
-              override.weighted,
-              pricingFallback
-          )
+            override.weighted,
+            pricingFallback
+        )
         : undefined
     const stock = override.stock
         ? normalizePartialStockAdvancedSettings(override.stock)
@@ -316,6 +317,4 @@ function asRecord(value: unknown): Record<string, unknown> | null {
         : null
 }
 
-function hasKeys(value: object | null | undefined): boolean {
-    return !!value && Object.keys(value).length > 0
-}
+

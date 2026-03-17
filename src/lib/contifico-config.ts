@@ -8,6 +8,7 @@ import {
 } from "./advanced-settings"
 import type { ImportFilterConfig } from "./contifico-filters"
 import { safeJsonParse } from "./json"
+import { hasKeys } from "./utils"
 
 export const VARIANT_MODE_VALUES = ["auto", "contifico", "simple", "weighted"] as const
 export type VariantMode = (typeof VARIANT_MODE_VALUES)[number]
@@ -163,8 +164,8 @@ export function serializeContificoConfigInput(
             input.import_filters === undefined
                 ? undefined
                 : input.import_filters
-                  ? JSON.stringify(input.import_filters)
-                  : null,
+                    ? JSON.stringify(input.import_filters)
+                    : null,
     }
 }
 
@@ -178,6 +179,4 @@ export function isWeightedPvpField(
     return !!value && WEIGHTED_PVP_FIELD_VALUES.includes(value as WeightedPvpField)
 }
 
-function hasKeys(value: object): boolean {
-    return Object.keys(value).length > 0
-}
+

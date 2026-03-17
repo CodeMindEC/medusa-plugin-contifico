@@ -12,6 +12,10 @@ import {
     isTestRef,
     type InvoiceConfig,
 } from "./shared"
+import {
+    CreateInvoiceSchema,
+    CreateTestInvoiceSchema,
+} from "./validators"
 
 interface InvoiceQueryService {
     graph<TData>(input: {
@@ -84,19 +88,15 @@ export async function createInvoice(
     service: ContificoModuleService,
     config: InvoiceConfig
 ) {
-    const { order_id, tipo_documento = "FAC" } = req.body as {
-        order_id?: string
-        tipo_documento?: "PRE" | "FAC"
+    const parsed = CreateInvoiceSchema.safeParse(req.body)
+    if (!parsed.success) {
+        res.status(400).json({
+            error: parsed.error.issues.map((i) => i.message).join("; "),
+        })
+        return
     }
 
-    if (!order_id) {
-        res.status(400).json({ error: "order_id es requerido" })
-        return
-    }
-    if (!["PRE", "FAC"].includes(tipo_documento)) {
-        res.status(400).json({ error: "tipo_documento debe ser PRE o FAC" })
-        return
-    }
+    const { order_id, tipo_documento } = parsed.data
 
     try {
         const query = req.scope.resolve("query") as InvoiceQueryService
@@ -155,11 +155,15 @@ export async function createTestInvoice(
         return
     }
 
-    const { tipo_documento = "PRE" } = req.body as { tipo_documento?: "PRE" | "FAC" }
-    if (!["PRE", "FAC"].includes(tipo_documento)) {
-        res.status(400).json({ error: "tipo_documento debe ser PRE o FAC" })
+    const parsed = CreateTestInvoiceSchema.safeParse(req.body)
+    if (!parsed.success) {
+        res.status(400).json({
+            error: parsed.error.issues.map((i) => i.message).join("; "),
+        })
         return
     }
+
+    const { tipo_documento } = parsed.data
 
     try {
         const result = await createStandaloneTestInvoiceDocument({

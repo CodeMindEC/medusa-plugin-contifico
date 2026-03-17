@@ -1,6 +1,7 @@
 import type { MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
 import { getRequiredInvoiceConfig } from "../../../contifico/invoices/shared"
 import { getContificoService } from "../../../contifico/shared"
+import { OrderDocumentPostSchema } from "../../../contifico/invoices/validators"
 import {
     createOrderInvoiceDocument,
     getOrderInvoiceDocumentsStatus,
@@ -45,6 +46,14 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
         return
     }
 
+    const parsed = OrderDocumentPostSchema.safeParse(req.body || {})
+    if (!parsed.success) {
+        res.status(400).json({
+            error: parsed.error.issues.map((i) => i.message).join("; "),
+        })
+        return
+    }
+
     try {
         const query = req.scope.resolve("query") as InvoiceQueryService
         const state = await getOrderInvoiceDocumentsStatus({
@@ -53,17 +62,8 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
             config,
             order_id: req.params.id,
         })
-        const { tipo_documento, action } = (req.body || {}) as {
-            tipo_documento?: "PRE" | "FAC"
-            action?: "create" | "update"
-        }
-        const nextType = tipo_documento || state.next_action.tipo_documento
-        const currentAction = action || "create"
-
-        if (!["PRE", "FAC"].includes(nextType)) {
-            res.status(400).json({ error: "tipo_documento debe ser PRE o FAC" })
-            return
-        }
+        const nextType = parsed.data.tipo_documento || state.next_action.tipo_documento
+        const currentAction = parsed.data.action
 
         if (currentAction === "update") {
             const result = await updateOrderInvoiceDocument({

@@ -1,5 +1,9 @@
 import type { MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
 
+const ALLOWED_HOSTS = ["api.contifico.com", "contifico.com"]
+const MAX_IMAGE_SIZE = 10 * 1024 * 1024 // 10 MB
+const FETCH_TIMEOUT_MS = 10_000 // 10s
+
 /**
  * GET /admin/contifico/media?url=<encoded_url>
  * Proxy que descarga una imagen de Contifico y la re-sirve
@@ -17,14 +21,50 @@ export async function GET(req: MedusaRequest, res: MedusaResponse) {
         return
     }
 
+    // Validar URL y restringir dominio (prevenir SSRF)
+    let parsedUrl: URL
     try {
-        const resp = await fetch(url, { redirect: "follow" })
+        parsedUrl = new URL(url)
+    } catch {
+        res.status(400).json({ error: "URL inválida" })
+        return
+    }
+
+    if (!ALLOWED_HOSTS.some((h) => parsedUrl.hostname === h || parsedUrl.hostname.endsWith(`.${h}`))) {
+        res.status(403).json({ error: "Dominio no permitido" })
+        return
+    }
+
+    try {
+        const controller = new AbortController()
+        const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
+
+        let resp: Response
+        try {
+            resp = await fetch(url, { redirect: "follow", signal: controller.signal })
+        } finally {
+            clearTimeout(timer)
+        }
+
         if (!resp.ok) {
             res.status(resp.status).json({ error: `Error descargando imagen: ${resp.status}` })
             return
         }
 
+        // Verificar tamaño antes de descargar el body completo
+        const contentLength = Number(resp.headers.get("content-length") || "0")
+        if (contentLength > MAX_IMAGE_SIZE) {
+            res.status(413).json({ error: "Imagen demasiado grande" })
+            return
+        }
+
         const buffer = Buffer.from(await resp.arrayBuffer())
+
+        if (buffer.length > MAX_IMAGE_SIZE) {
+            res.status(413).json({ error: "Imagen demasiado grande" })
+            return
+        }
+
         if (buffer.length < 100) {
             res.status(404).json({ error: "Imagen vacía" })
             return
@@ -44,6 +84,9 @@ export async function GET(req: MedusaRequest, res: MedusaResponse) {
         res.setHeader("Content-Disposition", "inline")
         res.end(buffer)
     } catch (err) {
-        res.status(500).json({ error: `Error proxy: ${(err as Error).message}` })
+        const message = (err as Error).name === "AbortError"
+            ? "Timeout descargando imagen"
+            : `Error proxy: ${(err as Error).message}`
+        res.status(500).json({ error: message })
     }
 }

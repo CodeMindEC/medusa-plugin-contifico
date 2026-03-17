@@ -2,6 +2,10 @@ export function getErrorDescription(error: unknown): string {
     return error instanceof Error ? error.message : "Error desconocido"
 }
 
+export function isAbortError(error: unknown): boolean {
+    return error instanceof DOMException && error.name === "AbortError"
+}
+
 export async function parseJsonResponse<TData>(response: Response): Promise<TData> {
     return response.json() as Promise<TData>
 }

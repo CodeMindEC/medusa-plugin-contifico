@@ -29,6 +29,13 @@ export default async function contificoOrderPlacedHandler({
     const config = await getRequiredInvoiceConfig(service)
 
     if (!config?.api_key || !config.api_pos || !config.auto_preinvoice_enabled) {
+        logContificoEvent("debug", "PRE automática omitida: config incompleta", {
+            correlation_id: correlationId,
+            operation: "subscriber.order_placed",
+            has_api_key: !!config?.api_key,
+            has_api_pos: !!config?.api_pos,
+            auto_preinvoice_enabled: !!config?.auto_preinvoice_enabled,
+        })
         return
     }
 

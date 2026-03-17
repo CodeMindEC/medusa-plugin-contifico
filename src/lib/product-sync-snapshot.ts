@@ -1,3 +1,5 @@
+import { asFiniteNumber, asNullableFiniteNumber, isRecord } from "./utils"
+
 export type ProductVariantPriceRuleOperator = "gt" | "lt" | "eq" | "lte" | "gte"
 
 export interface ProductVariantPriceRuleWithOperator {
@@ -43,8 +45,8 @@ export function normalizeProductSyncSnapshot(
 
     const variantPriceSets = Array.isArray(value.variant_price_sets)
         ? value.variant_price_sets
-              .map((entry) => normalizeProductVariantPriceSnapshot(entry))
-              .filter((entry): entry is ProductVariantPriceSnapshot => !!entry)
+            .map((entry) => normalizeProductVariantPriceSnapshot(entry))
+            .filter((entry): entry is ProductVariantPriceSnapshot => !!entry)
         : []
 
     if (variantPriceSets.length === 0) {
@@ -62,9 +64,9 @@ export function normalizeProductVariantPriceSnapshotPrices(
 ): ProductVariantPriceSnapshotPrice[] {
     return Array.isArray(value)
         ? value
-              .map((entry) => normalizeProductVariantPriceSnapshotPrice(entry))
-              .filter((entry): entry is ProductVariantPriceSnapshotPrice => !!entry)
-              .sort(compareSnapshotPrice)
+            .map((entry) => normalizeProductVariantPriceSnapshotPrice(entry))
+            .filter((entry): entry is ProductVariantPriceSnapshotPrice => !!entry)
+            .sort(compareSnapshotPrice)
         : []
 }
 
@@ -198,27 +200,4 @@ function compareSnapshotPrice(
     )
 }
 
-function asFiniteNumber(value: unknown): number | null {
-    if (typeof value === "number") {
-        return Number.isFinite(value) ? value : null
-    }
 
-    if (typeof value === "string" && value.trim() !== "") {
-        const parsed = Number.parseFloat(value)
-        return Number.isFinite(parsed) ? parsed : null
-    }
-
-    return null
-}
-
-function asNullableFiniteNumber(value: unknown): number | null {
-    if (value == null) {
-        return null
-    }
-
-    return asFiniteNumber(value)
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-    return !!value && typeof value === "object" && !Array.isArray(value)
-}

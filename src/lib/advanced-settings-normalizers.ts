@@ -13,6 +13,7 @@ import {
     normalizeWeightedCreationMode,
     normalizeWeightedPresentationProfiles,
 } from "./weighted-presentation-profiles"
+import { hasKeys } from "./utils"
 import {
     INVOICE_MISSING_MAPPING_VALUES,
     MATCH_PRIORITY_VALUES,
@@ -82,8 +83,8 @@ export function normalizeWeightedAdvancedSettings(
     const pricingStrategy = isWeightedPriceStrategy(value?.pricing_strategy)
         ? value.pricing_strategy
         : legacyRules.length > 0
-          ? "rules_by_weight"
-          : defaults.pricing_strategy
+            ? "rules_by_weight"
+            : defaults.pricing_strategy
     const strategyConfig = normalizeWeightedPriceStrategyConfig(
         pricingStrategy,
         value?.strategy_config,
@@ -97,7 +98,7 @@ export function normalizeWeightedAdvancedSettings(
     )
     const requestedDefaultProfileId =
         typeof value?.default_profile_id === "string" &&
-        value.default_profile_id.trim().length > 0
+            value.default_profile_id.trim().length > 0
             ? value.default_profile_id.trim()
             : null
     const defaultProfileId = creationProfiles.some(
@@ -105,8 +106,8 @@ export function normalizeWeightedAdvancedSettings(
     )
         ? requestedDefaultProfileId
         : creationProfiles.length === 1
-          ? creationProfiles[0].id
-          : null
+            ? creationProfiles[0].id
+            : null
 
     return {
         ...defaults,
@@ -144,14 +145,14 @@ export function mergeWeightedAdvancedSettings(
         : base.pricing_strategy
     const strategyConfig =
         override.strategy_config === undefined &&
-        override.pvp_field_by_grams === undefined
+            override.pvp_field_by_grams === undefined
             ? base.strategy_config
             : buildMergedWeightedStrategyConfig(
-                  base,
-                  override,
-                  nextStrategy,
-                  fallbackField
-              )
+                base,
+                override,
+                nextStrategy,
+                fallbackField
+            )
 
     return normalizeWeightedAdvancedSettings(
         {
@@ -383,8 +384,8 @@ function normalizeMatchPriority(
 ): MatchPriority[] {
     const list = Array.isArray(value)
         ? value.filter((item): item is MatchPriority =>
-              MATCH_PRIORITY_VALUES.includes(item)
-          )
+            MATCH_PRIORITY_VALUES.includes(item)
+        )
         : []
     return list.length > 0 ? list : [...fallback]
 }
@@ -405,20 +406,20 @@ function normalizeLegacyWeightedRules(
 ): WeightedPvpByGramsRule[] {
     return Array.isArray(value)
         ? value
-              .map((rule) => ({
-                  grams: normalizePositiveNumber(rule?.grams),
-                  field: isStrategyWeightedPvpField(rule?.field)
-                      ? rule.field
-                      : null,
-              }))
-              .filter(
-                  (
-                      rule
-                  ): rule is {
-                      grams: number
-                      field: WeightedPvpField
-                  } => rule.grams != null && rule.field != null
-              )
+            .map((rule) => ({
+                grams: normalizePositiveNumber(rule?.grams),
+                field: isStrategyWeightedPvpField(rule?.field)
+                    ? rule.field
+                    : null,
+            }))
+            .filter(
+                (
+                    rule
+                ): rule is {
+                    grams: number
+                    field: WeightedPvpField
+                } => rule.grams != null && rule.field != null
+            )
         : []
 }
 
@@ -448,6 +449,4 @@ function isInvoiceMissingMapping(value: unknown): value is InvoiceMissingMapping
     return INVOICE_MISSING_MAPPING_VALUES.includes(value as InvoiceMissingMapping)
 }
 
-function hasKeys(value: object | null | undefined): boolean {
-    return !!value && Object.keys(value).length > 0
-}
+

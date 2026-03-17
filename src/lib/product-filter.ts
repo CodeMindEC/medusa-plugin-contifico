@@ -77,8 +77,8 @@ export function evaluateRule(
             try {
                 return new RegExp(target, "i").test(value)
             } catch {
-                // Regex invalida -> no filtra (seguro)
-                return true
+                // Regex invalida -> fail-closed (no pasa el filtro)
+                return false
             }
 
         case "is_empty":

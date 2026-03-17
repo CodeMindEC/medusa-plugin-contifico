@@ -1,12 +1,17 @@
+/**
+ * Invoice payload — Build Contifico document payloads from Medusa orders.
+ *
+ * Split into sub-modules:
+ * - invoice-payload-customer.ts → Customer resolution (cédula, RUC, tipo persona)
+ * - invoice-payload-test.ts     → Test document payloads
+ */
+
 import { ContificoClient } from "../client"
 import {
     resolveEffectiveProductRules,
     type AdvancedContificoSettings,
 } from "../advanced-settings"
-import {
-    asCustomerMapMetadata,
-    asProductMapMetadata,
-} from "../contifico-metadata"
+import { asProductMapMetadata } from "../contifico-metadata"
 import {
     calculateWeightedInvoiceQuantity,
     getEffectiveMappingMode,
@@ -19,26 +24,24 @@ import { resolveWeightedPricePerGram } from "../strategies/pricing"
 import { renderTemplate } from "../strategies/invoicing"
 import type {
     ContificoCobroCreate,
-    ContificoDocumentoCliente,
     ContificoDocumentoCreate,
     ContificoDocumentoDetalleCreate,
     ContificoProducto,
 } from "../types"
 import type ContificoModuleService from "../../modules/contifico/service"
 import { getContificoConfig } from "../../api/admin/contifico/shared"
+import { resolveCliente } from "./invoice-payload-customer"
+import { testRef } from "./invoice-payload-test"
 
-const TEST_REF_PREFIX = "MEDUSA-TEST"
+// ── Re-exports (backward compatibility) ──────────────────
+export { createTestDocumentoPayload, isTestRef } from "./invoice-payload-test"
+export { TEST_CLIENT } from "./invoice-payload-customer"
+
+// ── Constants ────────────────────────────────────────────
+
 const IVA_RATE = 15
 
-const TEST_CLIENT: ContificoDocumentoCliente = {
-    cedula: "1041831254",
-    razon_social: "CONSUMIDOR FINAL PRUEBA",
-    tipo: "N",
-    email: "dev@prueba.com",
-    direccion: "Ciudad",
-    telefonos: "0999999999",
-    es_extranjero: false,
-}
+// ── Types ────────────────────────────────────────────────
 
 export interface InvoiceOrderGraph {
     id: string
@@ -138,6 +141,8 @@ interface InvoiceTemplateValues {
     email: string
 }
 
+// ── Config ───────────────────────────────────────────────
+
 export async function getRequiredInvoiceConfig(
     service: ContificoModuleService
 ): Promise<InvoiceConfig | null> {
@@ -158,6 +163,8 @@ export async function getRequiredInvoiceConfig(
         advanced_settings: normalized.advanced_settings,
     }
 }
+
+// ── Main payload builder ─────────────────────────────────
 
 export async function buildDocumentoFromOrder(
     order: InvoiceOrderGraph,
@@ -343,6 +350,8 @@ export async function buildDocumentoFromOrder(
     }
 }
 
+// ── Template & reference helpers ─────────────────────────
+
 export function buildOrderInvoiceTemplateValues(
     order: Pick<InvoiceOrderGraph, "id" | "display_id" | "email" | "customer">
 ): InvoiceTemplateValues {
@@ -367,6 +376,8 @@ export function buildOrderInvoiceReference(
     ).value
 }
 
+// ── Totals ───────────────────────────────────────────────
+
 export function calculateOrderTotalsFromOrder(
     order: Pick<InvoiceOrderGraph, "items">
 ): OrderTotalsSummary {
@@ -388,66 +399,7 @@ export function calculateOrderTotalsFromOrder(
     }
 }
 
-export async function createTestDocumentoPayload(
-    service: ContificoModuleService,
-    tipo_documento: "PRE" | "FAC"
-): Promise<ContificoDocumentoCreate> {
-    const products = await service.listContificoEntityMaps({ entity_type: "product" })
-    const productId = products[0]?.contifico_id
-
-    if (!productId) {
-        throw new Error(
-            "No hay productos vinculados con Contifico. Sincroniza productos primero."
-        )
-    }
-
-    const subtotal_12 = 1
-    const iva = parseFloat(((subtotal_12 * IVA_RATE) / 100).toFixed(2))
-    const total = parseFloat((subtotal_12 + iva).toFixed(2))
-
-    return {
-        pos: "",
-        fecha_emision: today(),
-        hora_emision: nowHour(),
-        tipo_registro: "CLI",
-        tipo_documento,
-        documento: `999-999-${String(Date.now()).slice(-9).padStart(9, "0")}`,
-        estado: "P",
-        electronico: "0",
-        autorizacion: "0000000000",
-        reserva_relacionada: null,
-        referencia: testRef(),
-        descripcion: `Documento de prueba Medusa - ${new Date().toLocaleString()}`,
-        adicional1: null,
-        adicional2: null,
-        cliente: TEST_CLIENT,
-        detalles: [
-            {
-                producto_id: productId,
-                cantidad: 1,
-                precio: 1,
-                porcentaje_iva: IVA_RATE,
-                base_gravable: subtotal_12,
-                base_cero: 0,
-                base_no_gravable: 0,
-                porcentaje_descuento: 0,
-                serie: "TEST",
-                descripcion: "Producto de prueba Medusa",
-            },
-        ],
-        cobros: [],
-        subtotal_0: 0,
-        subtotal_12,
-        iva,
-        ice: 0,
-        servicio: 0,
-        total,
-    }
-}
-
-export function isTestRef(reference?: string | null): boolean {
-    return !!reference && reference.startsWith(TEST_REF_PREFIX)
-}
+// ── Private helpers ──────────────────────────────────────
 
 function sumItemAdjustments(
     adjustments?: Array<{ amount: number }> | null
@@ -494,54 +446,6 @@ function upsertWeightedGroup(
     })
 }
 
-async function resolveCliente(
-    order: InvoiceOrderGraph,
-    service: ContificoModuleService
-): Promise<ContificoDocumentoCliente> {
-    const customerMaps = order.customer_id
-        ? await service.listContificoEntityMaps({
-            entity_type: "customer",
-            medusa_id: order.customer_id,
-        })
-        : []
-
-    const mappedCustomer = customerMaps[0]
-    const metadata = asCustomerMapMetadata(mappedCustomer?.metadata)
-    const customerMetadata = order.customer?.metadata || {}
-    const billingAddress = order.billing_address
-    const shippingAddress = order.shipping_address
-    const preferredAddress = billingAddress || shippingAddress
-    const orderMetadata = order.metadata || {}
-    const documentoCliente = resolveDocumentoCliente(
-        metadata,
-        customerMetadata,
-        orderMetadata,
-        billingAddress?.metadata,
-        shippingAddress?.metadata
-    )
-
-    return {
-        cedula: documentoCliente || "9999999999999",
-        razon_social:
-            (metadata.razon_social as string | undefined) ||
-            `${order.customer?.first_name || ""} ${order.customer?.last_name || ""}`.trim() ||
-            `${preferredAddress?.first_name || ""} ${preferredAddress?.last_name || ""}`.trim() ||
-            "CONSUMIDOR FINAL",
-        tipo: resolveContificoCustomerType(
-            documentoCliente,
-            metadata,
-            customerMetadata,
-            orderMetadata,
-            billingAddress?.metadata,
-            shippingAddress?.metadata
-        ),
-        email: order.customer?.email || order.email || "",
-        direccion: billingAddress?.address_1 || shippingAddress?.address_1 || "",
-        telefonos: billingAddress?.phone || shippingAddress?.phone || "",
-        es_extranjero: false,
-    }
-}
-
 async function resolveContificoProductMap(
     productId: string | null,
     service: ContificoModuleService
@@ -585,68 +489,4 @@ function today(): string {
 
 function nowHour(): string {
     return new Date().toISOString().slice(11, 19)
-}
-
-function testRef(): string {
-    return `${TEST_REF_PREFIX}-${Date.now()}`
-}
-
-function extractCedulaFromMetadata(metadata: Record<string, unknown> | null | undefined): string | undefined {
-    const normalized = String(metadata?.cedula ?? "").replace(/\D/g, "").trim()
-    return normalized || undefined
-}
-
-function extractRucFromMetadata(metadata: Record<string, unknown> | null | undefined): string | undefined {
-    const normalized = String(metadata?.ruc ?? "").replace(/\D/g, "").trim()
-    return normalized || undefined
-}
-
-function resolveDocumentoCliente(
-    ...sources: Array<Record<string, unknown> | null | undefined>
-): string | undefined {
-    for (const source of sources) {
-        const documento = extractCedulaFromMetadata(source) || extractRucFromMetadata(source)
-        if (documento) {
-            return documento
-        }
-    }
-
-    return undefined
-}
-
-function resolveContificoCustomerType(
-    documento: string | undefined,
-    ...sources: Array<Record<string, unknown> | null | undefined>
-): ContificoDocumentoCliente["tipo"] {
-    for (const source of sources) {
-        const explicitType = normalizeContificoCustomerType(source?.tipo || source?.tipo_persona)
-        if (explicitType) {
-            return explicitType
-        }
-    }
-
-    return deriveContificoCustomerTypeFromDocument(documento)
-}
-
-function normalizeContificoCustomerType(value: unknown): ContificoDocumentoCliente["tipo"] | undefined {
-    if (value === "N" || value === "J" || value === "I" || value === "P") {
-        return value
-    }
-
-    return undefined
-}
-
-function deriveContificoCustomerTypeFromDocument(
-    documento: string | undefined
-): ContificoDocumentoCliente["tipo"] {
-    const normalized = String(documento ?? "").replace(/\D/g, "").trim()
-
-    if (normalized.length === 13) {
-        const thirdDigit = Number(normalized[2] || 0)
-        if (thirdDigit === 6 || thirdDigit === 9) {
-            return "J"
-        }
-    }
-
-    return "N"
 }

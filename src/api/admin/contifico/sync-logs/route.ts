@@ -1,6 +1,7 @@
 import type { MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
 import { CONTIFICO_MODULE } from "../../../../modules/contifico"
 import type ContificoModuleService from "../../../../modules/contifico/service"
+import { SyncLogsQuerySchema } from "../invoices/validators"
 
 /**
  * GET /admin/contifico/sync-logs
@@ -9,11 +10,15 @@ import type ContificoModuleService from "../../../../modules/contifico/service"
 export async function GET(req: MedusaRequest, res: MedusaResponse) {
     const service: ContificoModuleService = req.scope.resolve(CONTIFICO_MODULE)
 
-    const limit = Number(req.query.limit) || 20
-    const offset = Number(req.query.offset) || 0
-    const syncType = req.query.sync_type as string | undefined
-    const status = req.query.status as string | string[] | undefined
-    const parentLogId = req.query.parent_log_id as string | undefined
+    const parsed = SyncLogsQuerySchema.safeParse(req.query)
+    if (!parsed.success) {
+        res.status(400).json({
+            error: parsed.error.issues.map((i) => i.message).join("; "),
+        })
+        return
+    }
+
+    const { limit, offset, sync_type: syncType, status, parent_log_id: parentLogId } = parsed.data
 
     const filters: Record<string, unknown> = {}
     if (syncType) {
@@ -32,5 +37,5 @@ export async function GET(req: MedusaRequest, res: MedusaResponse) {
         skip: offset,
     })
 
-    res.json({ sync_logs: logs, count, limit, offset })
+    res.json({ logs, count, limit, offset })
 }

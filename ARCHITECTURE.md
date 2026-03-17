@@ -162,3 +162,60 @@ Cobertura futura recomendada:
 4. extender `config-gates.ts` si introduce nuevas dependencias,
 5. agregar tests de resolución, normalización y explanation,
 6. exponer la decisión efectiva en preview/diagnostics si afecta runtime.
+
+## Client decomposition
+
+The Contifico HTTP client was split from a single 650+ line file into focused modules:
+
+- `src/lib/client/base.ts` — `ContificoClientBase` with retry, timeout, SSRF guard
+- `src/lib/client/products.ts` — product CRUD + categories
+- `src/lib/client/invoices.ts` — documento creation, query, cancellation
+- `src/lib/client/customers.ts` — customer search + creation
+- `src/lib/client/inventory.ts` — stock lookups
+- `src/lib/client/index.ts` — `ContificoClient` facade re-exporting all methods
+- `src/lib/client.ts` — barrel re-export for backward compatibility
+
+## Use-case file splits
+
+Large use-case files were decomposed while maintaining backward-compatible barrel re-exports from the original file:
+
+**invoice-documents.ts** (1353 → 602 lines):
+
+- `invoice-documents-utils.ts` — shared constants, helpers
+- `invoice-idempotency.ts` — entity map persistence, deduplication
+- `invoice-documents-query.ts` — status queries, document lookups
+- `invoice-documents-test.ts` — test invoice operations
+
+**product-links.ts** (943 → 466 lines):
+
+- `product-links-rules.ts` — ProductRulesOverride merge logic
+- `product-links-relink.ts` — post-relink cleanup, price refresh
+
+**invoice-payload.ts** (652 → 492 lines):
+
+- `invoice-payload-customer.ts` — customer resolution (cédula, RUC, customer type)
+- `invoice-payload-test.ts` — test document payload builders
+
+## API validation
+
+Zod schemas validate all API inputs at the boundary layer:
+
+- `src/api/admin/contifico/invoices/validators.ts` — schemas for invoice, test invoice, document, and sync-log endpoints
+- `src/api/admin/contifico/shared.ts` — separated `loadContificoConfig()` (pure read) from `migrateContificoConfigIfNeeded()` (side-effect)
+
+## Admin UI structure
+
+The product mapping page was decomposed:
+
+- `products/use-product-link-state.ts` — custom hook with all state, handlers, and data fetching
+- `products/page.tsx` — pure rendering component consuming the hook
+
+Admin data hooks (`use-admin-data.ts`) use `AbortController` to cancel in-flight requests on unmount and interval cleanup.
+
+## Testing strategy (updated)
+
+Additional test suites added:
+
+- `src/lib/product-filter.test.ts` — evaluateRule operators, nested fields, regex fail-closed, AND/OR mode
+- `src/api/admin/contifico/invoices/validators.test.ts` — Zod schema validation (defaults, coercion, boundary values)
+- `src/api/admin/contifico/media/route.test.ts` — media proxy (SSRF blocking, MIME detection, size limits, timeout)
