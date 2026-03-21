@@ -9,6 +9,7 @@
         "./contifico": "./.medusa/server/src/modules/contifico/index.js",
         "./modules/contifico": "./.medusa/server/src/modules/contifico/index.js",
         "./modules/*": "./.medusa/server/src/modules/*/index.js",
+        "./.medusa/server/src/modules/*": "./.medusa/server/src/modules/*/index.js",
         "./workflows": "./.medusa/server/src/workflows/index.js",
         "./admin": {
             "import": "./.medusa/server/src/admin/index.mjs",
