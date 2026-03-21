@@ -24,7 +24,6 @@ export function UiSelectField({
 
     return (
         <Select
-            key={value || "__empty__"}
             value={value || undefined}
             onValueChange={onValueChange}
             disabled={disabled}

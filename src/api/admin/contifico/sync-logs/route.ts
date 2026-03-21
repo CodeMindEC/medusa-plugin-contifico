@@ -37,5 +37,5 @@ export async function GET(req: MedusaRequest, res: MedusaResponse) {
         skip: offset,
     })
 
-    res.json({ logs, count, limit, offset })
+    res.json({ sync_logs: logs, count, limit, offset })
 }

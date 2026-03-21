@@ -1,16 +1,15 @@
 {
     "name": "@codemind.ec/medusa-plugin-contifico",
     "description": "Medusa v2 plugin for Contifico ERP integration — product sync, stock management, customer mapping, and electronic invoicing for Ecuador.",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "author": "Kollor <dev@codemind.ec> (https://codemind.ec)",
     "license": "MIT",
     "exports": {
         "./package.json": "./package.json",
-        "./workflows": "./.medusa/server/src/workflows/index.js",
-        "./.medusa/server/src/modules/*": "./.medusa/server/src/modules/*/index.js",
+        "./contifico": "./.medusa/server/src/modules/contifico/index.js",
+        "./modules/contifico": "./.medusa/server/src/modules/contifico/index.js",
         "./modules/*": "./.medusa/server/src/modules/*/index.js",
-        "./providers/*": "./.medusa/server/src/providers/*/index.js",
-        "./*": "./.medusa/server/src/*.js",
+        "./workflows": "./.medusa/server/src/workflows/index.js",
         "./admin": {
             "import": "./.medusa/server/src/admin/index.mjs",
             "require": "./.medusa/server/src/admin/index.js",
