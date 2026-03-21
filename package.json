@@ -1,7 +1,7 @@
 {
     "name": "@codemind.ec/medusa-plugin-contifico",
     "description": "Medusa v2 plugin for Contifico ERP integration — product sync, stock management, customer mapping, and electronic invoicing for Ecuador.",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "author": "Kollor <dev@codemind.ec> (https://codemind.ec)",
     "license": "MIT",
     "exports": {

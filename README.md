@@ -42,13 +42,19 @@ pnpm add @codemind.ec/medusa-plugin-contifico
 
 ## Configuration
 
-Add the plugin to your `medusa-config.ts`:
+Add the plugin and its module to your `medusa-config.ts`:
 
 ```typescript
 import { defineConfig } from "@medusajs/framework/utils"
 
 export default defineConfig({
   // ...
+  modules: [
+    {
+      resolve: "@codemind.ec/medusa-plugin-contifico/contifico",
+      definition: { isQueryable: true },
+    },
+  ],
   plugins: [
     {
       resolve: "@codemind.ec/medusa-plugin-contifico",
@@ -57,6 +63,8 @@ export default defineConfig({
   ],
 })
 ```
+
+> **Nota:** El módulo se registra por separado en `modules[]` con `isQueryable: true` para que sea accesible desde el query graph de Medusa. La entrada en `plugins[]` carga admin UI, API routes, subscribers y links.
 
 ### Environment Variables
 
@@ -192,17 +200,60 @@ The admin UI uses declarative dependency gates to show/hide/disable fields based
 
 ## API Reference
 
-### Admin Routes
+### Admin Routes — Configuration
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `GET` | `/admin/contifico/config` | Get current configuration |
-| `POST` | `/admin/contifico/config` | Update configuration |
-| `GET` | `/admin/contifico/bodegas` | List warehouses from Contífico |
-| `GET` | `/admin/contifico/status` | Health check + last sync timestamps |
-| `POST` | `/admin/contifico/sync/products` | Trigger manual product sync |
-| `POST` | `/admin/contifico/invoices/test` | Preview invoice payload |
-| `GET` | `/admin/contifico/linked-products` | List linked products for diagnostics |
+| `POST` | `/admin/contifico/config` | Create or update configuration |
+| `POST` | `/admin/contifico/config/check-connection` | Test API connection to Contífico |
+| `GET` | `/admin/contifico/config/bodegas` | List warehouses from Contífico |
+
+### Admin Routes — Sync
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/admin/contifico/sync/products` | Trigger product sync |
+| `POST` | `/admin/contifico/sync/products/preview` | Preview product sync (dry run) |
+| `POST` | `/admin/contifico/sync/products/stock` | Trigger stock sync |
+| `POST` | `/admin/contifico/sync/products/delete` | Delete imported products |
+| `POST` | `/admin/contifico/sync/products/delete/preview` | Preview product deletion (dry run) |
+| `POST` | `/admin/contifico/sync/customers` | Sync customers to Contífico |
+| `GET` | `/admin/contifico/sync-logs` | List recent sync logs |
+
+### Admin Routes — Products
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/admin/contifico/products/linked` | List linked products (diagnostics) |
+| `GET` | `/admin/contifico/products/match` | Get product match recommendations |
+| `POST` | `/admin/contifico/products/link` | Create product link (Medusa ↔ Contífico) |
+| `PUT` | `/admin/contifico/products/link` | Re-link / update a product link |
+| `DELETE` | `/admin/contifico/products/link` | Remove a product link |
+| `POST` | `/admin/contifico/products/linked/migrate` | Migrate linked product metadata |
+
+### Admin Routes — Invoicing
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/admin/contifico/invoices` | List invoices |
+| `POST` | `/admin/contifico/invoices` | Create invoice or run test actions |
+| `POST` | `/admin/contifico/invoices/preview` | Preview invoice document (dry run) |
+| `GET` | `/admin/orders/:id/contifico-documents` | Get document status for an order |
+| `POST` | `/admin/orders/:id/contifico-documents` | Create / update order documents |
+
+### Admin Routes — Media
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/admin/contifico/media` | Proxy Contífico product images |
+
+### Health Check
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/admin/plugin` | Plugin health check (admin) |
+| `GET` | `/store/plugin` | Plugin health check (store) |
 
 ---
 
