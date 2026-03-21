@@ -1,76 +1,76 @@
 {
-  "name": "@codemind/medusa-plugin-contifico",
-  "description": "Medusa v2 plugin for Contifico ERP integration — product sync, stock management, customer mapping, and electronic invoicing for Ecuador.",
-  "version": "1.0.0",
-  "author": "Kollor <dev@codemind.ec> (https://codemind.ec)",
-  "license": "MIT",
-  "exports": {
-    "./package.json": "./package.json",
-    "./workflows": "./.medusa/server/src/workflows/index.js",
-    "./.medusa/server/src/modules/*": "./.medusa/server/src/modules/*/index.js",
-    "./modules/*": "./.medusa/server/src/modules/*/index.js",
-    "./providers/*": "./.medusa/server/src/providers/*/index.js",
-    "./*": "./.medusa/server/src/*.js",
-    "./admin": {
-      "import": "./.medusa/server/src/admin/index.mjs",
-      "require": "./.medusa/server/src/admin/index.js",
-      "default": "./.medusa/server/src/admin/index.js"
+    "name": "@codemind.ec/medusa-plugin-contifico",
+    "description": "Medusa v2 plugin for Contifico ERP integration — product sync, stock management, customer mapping, and electronic invoicing for Ecuador.",
+    "version": "1.0.0",
+    "author": "Kollor <dev@codemind.ec> (https://codemind.ec)",
+    "license": "MIT",
+    "exports": {
+        "./package.json": "./package.json",
+        "./workflows": "./.medusa/server/src/workflows/index.js",
+        "./.medusa/server/src/modules/*": "./.medusa/server/src/modules/*/index.js",
+        "./modules/*": "./.medusa/server/src/modules/*/index.js",
+        "./providers/*": "./.medusa/server/src/providers/*/index.js",
+        "./*": "./.medusa/server/src/*.js",
+        "./admin": {
+            "import": "./.medusa/server/src/admin/index.mjs",
+            "require": "./.medusa/server/src/admin/index.js",
+            "default": "./.medusa/server/src/admin/index.js"
+        }
+    },
+    "scripts": {
+        "build": "medusa plugin:build",
+        "dev": "medusa plugin:develop",
+        "test": "vitest run",
+        "prepublishOnly": "medusa plugin:build"
+    },
+    "devDependencies": {
+        "@medusajs/admin-sdk": "2.13.3",
+        "@medusajs/admin-shared": "2.13.3",
+        "@medusajs/cli": "2.13.3",
+        "@medusajs/framework": "2.13.3",
+        "@medusajs/icons": "^2.13.3",
+        "@medusajs/medusa": "2.13.3",
+        "@medusajs/test-utils": "2.13.3",
+        "@medusajs/ui": "^4.1.3",
+        "@swc/core": "^1.7.28",
+        "@types/node": "^20",
+        "@types/react": "^18.3.3",
+        "@types/react-dom": "^18.3.0",
+        "prop-types": "^15.8.1",
+        "react": "^18.3.1",
+        "react-dom": "^18.3.1",
+        "ts-node": "^10.9.2",
+        "typescript": "^5",
+        "vite": "^5.4.14",
+        "vitest": "^2.1.8",
+        "yalc": "^1.0.0-pre.53"
+    },
+    "engines": {
+        "node": ">=20"
+    },
+    "files": [
+        ".medusa/server"
+    ],
+    "keywords": [
+        "medusa",
+        "medusa-plugin",
+        "medusa-v2",
+        "plugin",
+        "contifico",
+        "erp",
+        "ecuador",
+        "codemind",
+        "kollor"
+    ],
+    "packageManager": "pnpm@9.15.9",
+    "peerDependencies": {
+        "@medusajs/admin-sdk": "2.13.3",
+        "@medusajs/admin-shared": "2.13.3",
+        "@medusajs/cli": "2.13.3",
+        "@medusajs/framework": "2.13.3",
+        "@medusajs/icons": "^2.13.3",
+        "@medusajs/medusa": "2.13.3",
+        "@medusajs/test-utils": "2.13.3",
+        "@medusajs/ui": "^4.1.3"
     }
-  },
-  "scripts": {
-    "build": "medusa plugin:build",
-    "dev": "medusa plugin:develop",
-    "test": "vitest run",
-    "prepublishOnly": "medusa plugin:build"
-  },
-  "devDependencies": {
-    "@medusajs/admin-sdk": "2.13.3",
-    "@medusajs/admin-shared": "2.13.3",
-    "@medusajs/cli": "2.13.3",
-    "@medusajs/framework": "2.13.3",
-    "@medusajs/icons": "^2.13.3",
-    "@medusajs/medusa": "2.13.3",
-    "@medusajs/test-utils": "2.13.3",
-    "@medusajs/ui": "^4.1.3",
-    "@swc/core": "^1.7.28",
-    "@types/node": "^20",
-    "@types/react": "^18.3.3",
-    "@types/react-dom": "^18.3.0",
-    "prop-types": "^15.8.1",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "ts-node": "^10.9.2",
-    "typescript": "^5",
-    "vite": "^5.4.14",
-    "vitest": "^2.1.8",
-    "yalc": "^1.0.0-pre.53"
-  },
-  "engines": {
-    "node": ">=20"
-  },
-  "files": [
-    ".medusa/server"
-  ],
-  "keywords": [
-    "medusa",
-    "medusa-plugin",
-    "medusa-v2",
-    "plugin",
-    "contifico",
-    "erp",
-    "ecuador",
-    "codemind",
-    "kollor"
-  ],
-  "packageManager": "pnpm@9.15.9",
-  "peerDependencies": {
-    "@medusajs/admin-sdk": "2.13.3",
-    "@medusajs/admin-shared": "2.13.3",
-    "@medusajs/cli": "2.13.3",
-    "@medusajs/framework": "2.13.3",
-    "@medusajs/icons": "^2.13.3",
-    "@medusajs/medusa": "2.13.3",
-    "@medusajs/test-utils": "2.13.3",
-    "@medusajs/ui": "^4.1.3"
-  }
 }
