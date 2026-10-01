@@ -25,7 +25,7 @@ Medusa v2 plugin for **Contífico ERP** integration — product & stock sync, cu
 | Requirement | Version |
 |-------------|---------|
 | Node.js     | >= 20   |
-| Medusa      | >= 2.4.0 |
+| Medusa      | >= 2.13.3 (built and tested against 2.21.2) |
 | Contífico account | API key required |
 
 ---
